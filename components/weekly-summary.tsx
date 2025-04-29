@@ -9,9 +9,10 @@ import type { LassaFeverData } from "@/lib/data"
 interface WeeklySummaryProps {
   data: LassaFeverData[]
   week: string
+  selectedState?: string
 }
 
-export default function WeeklySummary({ data, week }: WeeklySummaryProps) {
+export default function WeeklySummary({ data, week, selectedState = 'All States' }: WeeklySummaryProps) {
   // Aggregate totals
   const totals = data.reduce(
     (acc, item) => {
@@ -23,16 +24,27 @@ export default function WeeklySummary({ data, week }: WeeklySummaryProps) {
     { suspected: 0, confirmed: 0, deaths: 0 },
   )
 
-  // Prepare data for bar chart - top 10 states by confirmed cases
-  const topStates = [...data]
-    .sort((a, b) => b.confirmed - a.confirmed)
-    .slice(0, 10)
-    .map((item) => ({
-      state: item.state,
-      suspected: item.suspected,
-      confirmed: item.confirmed,
-      deaths: item.deaths,
-    }))
+  // Prepare data for bar chart
+  const topStates = selectedState === 'All States'
+    ? [...data]
+        .filter(item => item.suspected > 0) // Only include states with Suspected cases > 0
+        .sort((a, b) => b.suspected - a.suspected) // Sort by Suspected cases
+        .slice(0, 6)
+        .map((item) => ({
+          state: item.state,
+          suspected: item.suspected,
+          confirmed: item.confirmed,
+          deaths: item.deaths,
+        }))
+    : [...data]
+        .sort((a, b) => b.confirmed - a.confirmed)
+        .slice(0, 6)
+        .map((item) => ({
+          state: item.state,
+          suspected: item.suspected,
+          confirmed: item.confirmed,
+          deaths: item.deaths,
+        }))
 
   return (
     <div className="grid gap-6 md:grid-cols-2">
@@ -77,7 +89,9 @@ export default function WeeklySummary({ data, week }: WeeklySummaryProps) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Top States by Confirmed Cases</CardTitle>
+          <CardTitle>
+            {selectedState === 'All States' ? 'Top States by Suspected Cases' : 'Top States by Confirmed Cases'}
+          </CardTitle>
           <CardDescription>States with highest Lassa fever burden for {week}</CardDescription>
         </CardHeader>
         <CardContent>
@@ -88,6 +102,10 @@ export default function WeeklySummary({ data, week }: WeeklySummaryProps) {
           ) : (
             <ChartContainer
               config={{
+                suspected: {
+                  label: "Suspected Cases",
+                  color: "hsl(var(--chart-1))",
+                },
                 confirmed: {
                   label: "Confirmed Cases",
                   color: "hsl(var(--chart-2))",
@@ -97,15 +115,20 @@ export default function WeeklySummary({ data, week }: WeeklySummaryProps) {
                   color: "hsl(var(--chart-3))",
                 },
               }}
-              className="h-[300px]"
+              className="min-h-[240px] flex items-center justify-center"
             >
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={topStates} layout="vertical" margin={{ top: 5, right: 30, left: 60, bottom: 5 }}>
+              <ResponsiveContainer width="100%" height={Math.max(300, topStates.length * 40)}>
+                <BarChart
+                  data={topStates}
+                  layout="vertical"
+                  margin={{ top: topStates.length < 5 ? 40 : 10, right: 30, left: 15, bottom: topStates.length < 5 ? 40 : 10 }}
+                >
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" />
+                  <XAxis type="number" tickFormatter={(value) => Math.round(value).toString()} />
                   <YAxis type="category" dataKey="state" />
                   <ChartTooltip content={<ChartTooltipContent />} />
                   <Legend />
+                  <Bar dataKey="suspected" fill="var(--color-suspected)" />
                   <Bar dataKey="confirmed" fill="var(--color-confirmed)" />
                   <Bar dataKey="deaths" fill="var(--color-deaths)" />
                 </BarChart>

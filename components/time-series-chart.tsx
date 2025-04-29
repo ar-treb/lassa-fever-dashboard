@@ -53,7 +53,7 @@ export default function TimeSeriesChart({ data }: TimeSeriesChartProps) {
               <LineChart data={formattedData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="weekLabel" interval="preserveStartEnd" minTickGap={30} />
-                <YAxis />
+                <YAxis tickFormatter={(value) => Math.round(value).toString()} />
                 <ChartTooltip
                   content={
                     <ChartTooltipContent

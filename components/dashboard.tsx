@@ -233,7 +233,7 @@ export default function Dashboard() {
               </Card>
             </div>
           ) : (
-            <WeeklySummary data={weeklyData} week={selectedWeek} />
+            <WeeklySummary data={weeklyData} week={selectedWeek} selectedState={selectedState} />
           )}
         </TabsContent>
 
