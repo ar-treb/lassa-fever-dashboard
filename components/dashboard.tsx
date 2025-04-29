@@ -290,7 +290,11 @@ export default function Dashboard() {
               </CardContent>
             </Card>
           ) : (
-            <StateMap data={weeklyData} />
+            <StateMap 
+              data={weeklyData} 
+              isFullYear={isFullYear} 
+              selectedYear={selectedYear} 
+            />
           )}
         </TabsContent>
       </Tabs>
