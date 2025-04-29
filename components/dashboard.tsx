@@ -15,6 +15,7 @@ export default function Dashboard() {
   const [selectedYear, setSelectedYear] = useState<string>("")
   const [selectedWeek, setSelectedWeek] = useState<string>("")
   const [selectedState, setSelectedState] = useState<string>("All States")
+  const [isFullYear, setIsFullYear] = useState<boolean>(false)
 
   const [availableYears, setAvailableYears] = useState<string[]>([])
   const [availableWeeks, setAvailableWeeks] = useState<string[]>([])
@@ -42,6 +43,9 @@ export default function Dashboard() {
           if (weeks.length > 0) {
             setSelectedWeek(weeks[weeks.length - 1])
           }
+          
+          // Reset full year flag when component loads
+          setIsFullYear(false)
         }
 
         const states = await fetchAvailableStates()
@@ -73,24 +77,39 @@ export default function Dashboard() {
     fetchTimeSeriesData()
   }, [selectedYear, selectedState])
 
-  // Fetch weekly data when week changes
+  // Fetch weekly or yearly data when week or year+fullYear changes
   useEffect(() => {
-    async function fetchWeeklyData() {
-      if (!selectedWeek) return
+    async function fetchWeeklyOrYearlyData() {
+      if (isFullYear) {
+        if (!selectedYear) return
+        
+        setLoading(true)
+        try {
+          // Fetch all data for the selected year
+          const data = await fetchLassaFeverData(selectedYear, undefined, selectedState)
+          setWeeklyData(data) // We're reusing the weekly data state for yearly data
+        } catch (error) {
+          console.error("Error fetching yearly data:", error)
+        } finally {
+          setLoading(false)
+        }
+      } else {
+        if (!selectedWeek) return
 
-      setLoading(true)
-      try {
-        const data = await fetchLassaFeverData(undefined, selectedWeek, selectedState)
-        setWeeklyData(data)
-      } catch (error) {
-        console.error("Error fetching weekly data:", error)
-      } finally {
-        setLoading(false)
+        setLoading(true)
+        try {
+          const data = await fetchLassaFeverData(undefined, selectedWeek, selectedState)
+          setWeeklyData(data)
+        } catch (error) {
+          console.error("Error fetching weekly data:", error)
+        } finally {
+          setLoading(false)
+        }
       }
     }
 
-    fetchWeeklyData()
-  }, [selectedWeek, selectedState])
+    fetchWeeklyOrYearlyData()
+  }, [selectedWeek, selectedState, selectedYear, isFullYear])
 
   // Update available weeks when year changes
   useEffect(() => {
@@ -150,13 +169,30 @@ export default function Dashboard() {
             <CardTitle className="text-lg">Week</CardTitle>
           </CardHeader>
           <CardContent>
-            <Select value={selectedWeek} onValueChange={setSelectedWeek} disabled={availableWeeks.length === 0}>
+            <Select 
+              value={isFullYear ? "full-year" : selectedWeek} 
+              onValueChange={(value) => {
+                if (value === "full-year") {
+                  setIsFullYear(true)
+                  setSelectedWeek("")
+                } else {
+                  setIsFullYear(false)
+                  setSelectedWeek(value)
+                }
+              }} 
+              disabled={availableWeeks.length === 0}>
               <SelectTrigger>
                 <SelectValue placeholder="Select week" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem key="full-year" value="full-year" onSelect={() => {
+                  setIsFullYear(true)
+                  setSelectedWeek("")
+                }}>
+                  Full Year
+                </SelectItem>
                 {availableWeeks.map((week) => (
-                  <SelectItem key={week} value={week}>
+                  <SelectItem key={week} value={week} onSelect={() => setIsFullYear(false)}>
                     {week}
                   </SelectItem>
                 ))}
@@ -233,7 +269,12 @@ export default function Dashboard() {
               </Card>
             </div>
           ) : (
-            <WeeklySummary data={weeklyData} week={selectedWeek} selectedState={selectedState} />
+            <WeeklySummary 
+              data={weeklyData} 
+              week={isFullYear ? `Full Year ${selectedYear}` : selectedWeek} 
+              selectedState={selectedState} 
+              isFullYear={isFullYear} 
+            />
           )}
         </TabsContent>
 

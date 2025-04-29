@@ -10,9 +10,10 @@ interface WeeklySummaryProps {
   data: LassaFeverData[]
   week: string
   selectedState?: string
+  isFullYear?: boolean
 }
 
-export default function WeeklySummary({ data, week, selectedState = 'All States' }: WeeklySummaryProps) {
+export default function WeeklySummary({ data, week, selectedState = 'All States', isFullYear = false }: WeeklySummaryProps) {
   // Aggregate totals
   const totals = data.reduce(
     (acc, item) => {
@@ -25,33 +26,58 @@ export default function WeeklySummary({ data, week, selectedState = 'All States'
   )
 
   // Prepare data for bar chart
-  const topStates = selectedState === 'All States'
-    ? [...data]
-        .filter(item => item.suspected > 0) // Only include states with Suspected cases > 0
-        .sort((a, b) => b.suspected - a.suspected) // Sort by Suspected cases
-        .slice(0, 6)
-        .map((item) => ({
-          state: item.state,
-          suspected: item.suspected,
-          confirmed: item.confirmed,
-          deaths: item.deaths,
-        }))
-    : [...data]
-        .sort((a, b) => b.confirmed - a.confirmed)
-        .slice(0, 6)
-        .map((item) => ({
-          state: item.state,
-          suspected: item.suspected,
-          confirmed: item.confirmed,
-          deaths: item.deaths,
-        }))
+  const topStates = (() => {
+    // If full year data needs to be aggregated by state first to avoid duplicates
+    let processedData = isFullYear
+      ? Object.values(
+          data.reduce((acc, item) => {
+            if (!acc[item.state]) {
+              acc[item.state] = {
+                state: item.state,
+                suspected: 0,
+                confirmed: 0,
+                deaths: 0,
+              }
+            }
+            acc[item.state].suspected += item.suspected
+            acc[item.state].confirmed += item.confirmed
+            acc[item.state].deaths += item.deaths
+            return acc
+          }, {} as Record<string, any>)
+        )
+      : [...data]
+
+    // Then apply sorting and filtering based on state selection
+    return selectedState === 'All States'
+      ? processedData
+          .filter(item => item.suspected > 0) // Only include states with Suspected cases > 0
+          .sort((a, b) => b.suspected - a.suspected) // Sort by Suspected cases
+          .slice(0, 6)
+          .map((item) => ({
+            state: item.state,
+            suspected: item.suspected,
+            confirmed: item.confirmed,
+            deaths: item.deaths,
+          }))
+      : processedData
+          .sort((a, b) => b.confirmed - a.confirmed)
+          .slice(0, 6)
+          .map((item) => ({
+            state: item.state,
+            suspected: item.suspected,
+            confirmed: item.confirmed,
+            deaths: item.deaths,
+          }))
+  })()
 
   return (
     <div className="grid gap-6 md:grid-cols-2">
       <Card>
         <CardHeader>
-          <CardTitle>Weekly Summary: {week}</CardTitle>
-          <CardDescription>Overview of Lassa fever cases for the selected week</CardDescription>
+          <CardTitle>{isFullYear ? 'Yearly Summary: ' : 'Weekly Summary: '}{week}</CardTitle>
+          <CardDescription>
+            Overview of Lassa fever cases for the {isFullYear ? 'selected year' : 'selected week'}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {data.length === 0 ? (
@@ -92,7 +118,9 @@ export default function WeeklySummary({ data, week, selectedState = 'All States'
           <CardTitle>
             {selectedState === 'All States' ? 'Top States by Suspected Cases' : 'Top States by Confirmed Cases'}
           </CardTitle>
-          <CardDescription>States with highest Lassa fever burden for {week}</CardDescription>
+          <CardDescription>
+            States with highest Lassa fever burden for the {isFullYear ? 'selected year' : 'selected week'}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {topStates.length === 0 ? (
@@ -141,7 +169,9 @@ export default function WeeklySummary({ data, week, selectedState = 'All States'
       <Card className="md:col-span-2">
         <CardHeader>
           <CardTitle>Detailed State Breakdown</CardTitle>
-          <CardDescription>Complete breakdown of Lassa fever cases by state for {week}</CardDescription>
+          <CardDescription>
+            Complete breakdown of Lassa fever cases by state for the {isFullYear ? 'selected year' : 'selected week'}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {data.length === 0 ? (
@@ -161,17 +191,47 @@ export default function WeeklySummary({ data, week, selectedState = 'All States'
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.map((item) => (
-                    <TableRow key={item.state}>
-                      <TableCell className="font-medium">{item.state}</TableCell>
-                      <TableCell className="text-right">{item.suspected}</TableCell>
-                      <TableCell className="text-right">{item.confirmed}</TableCell>
-                      <TableCell className="text-right">{item.deaths}</TableCell>
-                      <TableCell className="text-right">
-                        {item.confirmed > 0 ? `${((item.deaths / item.confirmed) * 100).toFixed(1)}%` : "N/A"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {isFullYear 
+                    // For full year view, group by state to avoid duplicates
+                    ? Object.values(
+                        data.reduce((acc, item) => {
+                          if (!acc[item.state]) {
+                            acc[item.state] = {
+                              state: item.state,
+                              suspected: 0,
+                              confirmed: 0,
+                              deaths: 0,
+                            }
+                          }
+                          acc[item.state].suspected += item.suspected
+                          acc[item.state].confirmed += item.confirmed
+                          acc[item.state].deaths += item.deaths
+                          return acc
+                        }, {} as Record<string, any>)
+                      ).map((item, index) => (
+                        <TableRow key={`${item.state}-${index}`}>
+                          <TableCell className="font-medium">{item.state}</TableCell>
+                          <TableCell className="text-right">{item.suspected}</TableCell>
+                          <TableCell className="text-right">{item.confirmed}</TableCell>
+                          <TableCell className="text-right">{item.deaths}</TableCell>
+                          <TableCell className="text-right">
+                            {item.confirmed > 0 ? `${((item.deaths / item.confirmed) * 100).toFixed(1)}%` : "N/A"}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    // For weekly view, no need to group since entries are unique
+                    : data.map((item, index) => (
+                        <TableRow key={`${item.state}-${index}`}>
+                          <TableCell className="font-medium">{item.state}</TableCell>
+                          <TableCell className="text-right">{item.suspected}</TableCell>
+                          <TableCell className="text-right">{item.confirmed}</TableCell>
+                          <TableCell className="text-right">{item.deaths}</TableCell>
+                          <TableCell className="text-right">
+                            {item.confirmed > 0 ? `${((item.deaths / item.confirmed) * 100).toFixed(1)}%` : "N/A"}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                  }
                 </TableBody>
               </Table>
             </div>
