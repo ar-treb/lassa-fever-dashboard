@@ -4,6 +4,8 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
 import TimeSeriesChart from "@/components/time-series-chart"
 import WeeklySummary from "@/components/weekly-summary"
 import StateMap from "@/components/state-map"
@@ -16,6 +18,7 @@ export default function Dashboard() {
   const [selectedWeek, setSelectedWeek] = useState<string>("")
   const [selectedState, setSelectedState] = useState<string>("All States")
   const [isFullYear, setIsFullYear] = useState<boolean>(false)
+  const [showAllStates, setShowAllStates] = useState<boolean>(true)
 
   const [availableYears, setAvailableYears] = useState<string[]>([])
   const [availableWeeks, setAvailableWeeks] = useState<string[]>([])
@@ -143,13 +146,19 @@ export default function Dashboard() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-lg">Year</CardTitle>
           </CardHeader>
           <CardContent>
-            <Select value={selectedYear} onValueChange={setSelectedYear} disabled={availableYears.length === 0}>
+            <Select value={selectedYear} onValueChange={(value) => {
+              setSelectedYear(value)
+              if (isFullYear) {
+                // If in yearly view, just update the year
+                setSelectedWeek("")
+              }
+            }}>
               <SelectTrigger>
                 <SelectValue placeholder="Select year" />
               </SelectTrigger>
@@ -169,35 +178,47 @@ export default function Dashboard() {
             <CardTitle className="text-lg">Week</CardTitle>
           </CardHeader>
           <CardContent>
-            <Select 
-              value={isFullYear ? "full-year" : selectedWeek} 
-              onValueChange={(value) => {
-                if (value === "full-year") {
-                  setIsFullYear(true)
-                  setSelectedWeek("")
-                } else {
-                  setIsFullYear(false)
-                  setSelectedWeek(value)
-                }
-              }} 
-              disabled={availableWeeks.length === 0}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select week" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem key="full-year" value="full-year" onSelect={() => {
-                  setIsFullYear(true)
-                  setSelectedWeek("")
-                }}>
-                  Full Year
-                </SelectItem>
-                {availableWeeks.map((week) => (
-                  <SelectItem key={week} value={week} onSelect={() => setIsFullYear(false)}>
-                    {week}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Label htmlFor="view-mode">Weekly</Label>
+                  <Switch 
+                    id="view-mode" 
+                    checked={isFullYear}
+                    onCheckedChange={(checked) => {
+                      setIsFullYear(checked)
+                      if (checked) {
+                        // When switching to yearly view, clear the selected week
+                        setSelectedWeek("")
+                      } else if (availableWeeks.length > 0) {
+                        // When switching to weekly view, set to latest week
+                        setSelectedWeek(availableWeeks[availableWeeks.length - 1])
+                      }
+                    }}
+                  />
+                  <Label htmlFor="view-mode">Yearly</Label>
+                </div>
+              </div>
+              
+              {!isFullYear && (
+                <Select 
+                  value={selectedWeek} 
+                  onValueChange={setSelectedWeek}
+                  disabled={isFullYear}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select week" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableWeeks.map((week) => (
+                      <SelectItem key={week} value={week}>
+                        {week}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
           </CardContent>
         </Card>
 
@@ -206,47 +227,59 @@ export default function Dashboard() {
             <CardTitle className="text-lg">State</CardTitle>
           </CardHeader>
           <CardContent>
-            <Select value={selectedState} onValueChange={setSelectedState}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select state" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="All States">All States</SelectItem>
-                {availableStates.map((state) => (
-                  <SelectItem key={state} value={state}>
-                    {state}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Label htmlFor="state-mode">Specific</Label>
+                  <Switch 
+                    id="state-mode" 
+                    checked={showAllStates}
+                    onCheckedChange={(checked) => {
+                      setShowAllStates(checked)
+                      if (checked) {
+                        // When switching to All States mode
+                        setSelectedState("All States")
+                      } else if (availableStates.length > 0) {
+                        // When switching to specific state mode, set to first state
+                        setSelectedState(availableStates[0])
+                      }
+                    }}
+                  />
+                  <Label htmlFor="state-mode">All States</Label>
+                </div>
+              </div>
+              
+              {!showAllStates && (
+                <Select 
+                  value={selectedState} 
+                  onValueChange={setSelectedState}
+                  disabled={showAllStates}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select state" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableStates.map((state) => (
+                      <SelectItem key={state} value={state}>
+                        {state}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      <Tabs defaultValue="time-series" className="space-y-4">
+      <Tabs defaultValue="summary" className="space-y-4">
         <TabsList>
+          <TabsTrigger value="summary">Summary</TabsTrigger>
           <TabsTrigger value="time-series">Time Series</TabsTrigger>
-          <TabsTrigger value="weekly-summary">Weekly Summary</TabsTrigger>
           <TabsTrigger value="state-map">State Map</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="time-series" className="space-y-4">
-          {loading ? (
-            <Card>
-              <CardHeader>
-                <Skeleton className="h-8 w-3/4" />
-                <Skeleton className="h-4 w-1/2" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-[400px] w-full" />
-              </CardContent>
-            </Card>
-          ) : (
-            <TimeSeriesChart data={aggregatedTimeSeriesData} />
-          )}
-        </TabsContent>
-
-        <TabsContent value="weekly-summary" className="space-y-4">
+        <TabsContent value="summary" className="space-y-4">
           {loading ? (
             <div className="grid gap-6 md:grid-cols-2">
               <Card>
@@ -275,6 +308,22 @@ export default function Dashboard() {
               selectedState={selectedState} 
               isFullYear={isFullYear} 
             />
+          )}
+        </TabsContent>
+
+        <TabsContent value="time-series" className="space-y-4">
+          {loading ? (
+            <Card>
+              <CardHeader>
+                <Skeleton className="h-8 w-3/4" />
+                <Skeleton className="h-4 w-1/2" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-[400px] w-full" />
+              </CardContent>
+            </Card>
+          ) : (
+            <TimeSeriesChart data={aggregatedTimeSeriesData} />
           )}
         </TabsContent>
 
