@@ -76,7 +76,7 @@ export default function Summary({ data, week, selectedState = 'All States', isFu
         <CardHeader>
           <CardTitle>{isFullYear ? 'Yearly Summary: ' : 'Weekly Summary: '}{week}</CardTitle>
           <CardDescription>
-            Overview of Lassa fever cases for the {isFullYear ? 'selected year' : 'selected week'}
+            Overview of Lassa fever cases{selectedState !== 'All States' ? ` in ${selectedState}` : ' in Nigeria'} for the {isFullYear ? 'selected year' : 'selected week'}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -119,7 +119,7 @@ export default function Summary({ data, week, selectedState = 'All States', isFu
             {selectedState === 'All States' ? 'Top States by Suspected Cases' : 'Top States by Confirmed Cases'}
           </CardTitle>
           <CardDescription>
-            States with highest Lassa fever burden for the {isFullYear ? 'selected year' : 'selected week'}
+            States with highest Lassa fever burden{selectedState !== 'All States' ? ` in ${selectedState}` : ' in Nigeria'} for the {isFullYear ? 'selected year' : 'selected week'}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -170,7 +170,7 @@ export default function Summary({ data, week, selectedState = 'All States', isFu
         <CardHeader>
           <CardTitle>Detailed State Breakdown</CardTitle>
           <CardDescription>
-            Complete breakdown of Lassa fever cases by state for the {isFullYear ? 'selected year' : 'selected week'}
+            Complete breakdown of Lassa fever cases{selectedState !== 'All States' ? ` in ${selectedState}` : ' in Nigeria'} for the {isFullYear ? 'selected year' : 'selected week'}
           </CardDescription>
         </CardHeader>
         <CardContent>

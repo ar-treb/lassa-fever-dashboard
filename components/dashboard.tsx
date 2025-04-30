@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import TimeSeriesChart from "@/components/time-series-chart"
-import WeeklySummary from "@/components/weekly-summary"
+import Summary from "@/components/summary"
 import StateMap from "@/components/state-map"
 import { fetchLassaFeverData, fetchAvailableYears, fetchAvailableWeeks, fetchAvailableStates } from "@/lib/data"
 import type { LassaFeverData } from "@/lib/data"
@@ -302,7 +302,7 @@ export default function Dashboard() {
               </Card>
             </div>
           ) : (
-            <WeeklySummary 
+            <Summary 
               data={weeklyData} 
               week={isFullYear ? `Full Year ${selectedYear}` : selectedWeek} 
               selectedState={selectedState} 
@@ -323,7 +323,7 @@ export default function Dashboard() {
               </CardContent>
             </Card>
           ) : (
-            <TimeSeriesChart data={aggregatedTimeSeriesData} />
+            <TimeSeriesChart data={aggregatedTimeSeriesData} selectedState={selectedState} />
           )}
         </TabsContent>
 
@@ -342,7 +342,8 @@ export default function Dashboard() {
             <StateMap 
               data={weeklyData} 
               isFullYear={isFullYear} 
-              selectedYear={selectedYear} 
+              selectedYear={selectedYear}
+              selectedState={selectedState} 
             />
           )}
         </TabsContent>

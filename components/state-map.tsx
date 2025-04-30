@@ -9,16 +9,17 @@ interface StateMapProps {
   data: LassaFeverData[]
   isFullYear?: boolean
   selectedYear?: string
+  selectedState?: string
 }
 
-export default function StateMap({ data, isFullYear = false, selectedYear }: StateMapProps) {
+export default function StateMap({ data, isFullYear = false, selectedYear, selectedState = 'All States' }: StateMapProps) {
   const [hoveredState, setHoveredState] = useState<string | null>(null)
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Nigeria State Map</CardTitle>
-        <CardDescription>Geographical distribution of Lassa fever cases</CardDescription>
+        <CardTitle>Nigeria State Map{selectedState !== 'All States' ? ` - ${selectedState}` : ''}</CardTitle>
+        <CardDescription>Geographical distribution of Lassa fever cases{selectedState !== 'All States' ? ` in ${selectedState}` : ' across Nigeria'}</CardDescription>
       </CardHeader>
       <CardContent>
         {data.length === 0 ? (
