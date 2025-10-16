@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
 import { MoonIcon, SunIcon } from "lucide-react"
@@ -17,11 +17,18 @@ export function AppNavigation() {
   const pathname = usePathname()
   const router = useRouter()
   const { theme, setTheme, resolvedTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const activeValue = useMemo(() => {
     const matching = routes.find((route) => route.value !== "/" && pathname.startsWith(route.value))
     return matching?.value ?? "/"
   }, [pathname])
+
+  const currentTheme = (resolvedTheme ?? theme) ?? "light"
 
   return (
     <div className="flex w-full items-center justify-between gap-4">
@@ -50,12 +57,13 @@ export function AppNavigation() {
         variant="outline"
         size="icon"
         onClick={() => {
-          const nextTheme = (resolvedTheme ?? theme) === "dark" ? "light" : "dark"
+          const effectiveTheme = (resolvedTheme ?? theme) ?? "light"
+          const nextTheme = effectiveTheme === "dark" ? "light" : "dark"
           setTheme(nextTheme)
         }}
         aria-label="Toggle theme"
       >
-        {(resolvedTheme ?? theme) === "dark" ? (
+        {mounted && currentTheme === "dark" ? (
           <SunIcon className="h-4 w-4 text-orange-500" />
         ) : (
           <MoonIcon className="h-4 w-4 text-blue-600" />
