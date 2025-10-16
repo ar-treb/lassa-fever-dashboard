@@ -39,7 +39,7 @@ export function AppNavigation() {
             <TabsTrigger
               key={route.value}
               value={route.value}
-              className="min-w-[170px] justify-center rounded-lg px-7 py-2 font-mono text-sm tracking-wide text-muted-foreground transition-colors data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=inactive]:hover:bg-muted/70 data-[state=inactive]:hover:text-foreground"
+              className="min-w-[170px] justify-center rounded-lg px-7 py-2 font-mono text-sm tracking-wide text-muted-foreground transition-colors data-[state=active]:bg-accent data-[state=active]:text-accent-foreground data-[state=inactive]:hover:bg-muted/70 data-[state=inactive]:hover:text-foreground"
             >
               {route.label}
             </TabsTrigger>

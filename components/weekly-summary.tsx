@@ -1,7 +1,7 @@
 "use client"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Legend, ResponsiveContainer } from "recharts"
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Legend } from "recharts"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import type { LassaFeverData } from "@/lib/data"
@@ -70,6 +70,8 @@ export default function WeeklySummary({ data, week, selectedState = 'All States'
           }))
   })()
 
+  const barChartHeight = Math.max(320, topStates.length * 52)
+
   return (
     <div className="grid gap-6 md:grid-cols-2">
       <Card>
@@ -96,7 +98,7 @@ export default function WeeklySummary({ data, week, selectedState = 'All States'
                   <span className="text-sm text-muted-foreground">Confirmed</span>
                 </div>
                 <div className="flex flex-col items-center justify-center p-4 bg-muted rounded-lg">
-                  <span className="text-3xl font-bold text-gray-700">{totals.deaths}</span>
+                  <span className="text-3xl font-bold text-slate-800 dark:text-slate-200">{totals.deaths}</span>
                   <span className="text-sm text-muted-foreground">Deaths</span>
                 </div>
               </div>
@@ -143,24 +145,28 @@ export default function WeeklySummary({ data, week, selectedState = 'All States'
                   color: "hsl(var(--chart-3))",
                 },
               }}
-              className="min-h-[240px] flex items-center justify-center"
+              className="w-full"
+              style={{ height: barChartHeight }}
             >
-              <ResponsiveContainer width="100%" height={Math.max(300, topStates.length * 40)}>
-                <BarChart
-                  data={topStates}
-                  layout="vertical"
-                  margin={{ top: topStates.length < 5 ? 40 : 10, right: 30, left: 15, bottom: topStates.length < 5 ? 40 : 10 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" tickFormatter={(value) => Math.round(value).toString()} />
-                  <YAxis type="category" dataKey="state" />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Legend />
-                  <Bar dataKey="suspected" fill="var(--color-suspected)" />
-                  <Bar dataKey="confirmed" fill="var(--color-confirmed)" />
-                  <Bar dataKey="deaths" fill="var(--color-deaths)" />
-                </BarChart>
-              </ResponsiveContainer>
+              <BarChart
+                data={topStates}
+                layout="vertical"
+                margin={{
+                  top: topStates.length < 5 ? 32 : 16,
+                  right: 16,
+                  left: 12,
+                  bottom: topStates.length < 5 ? 32 : 16,
+                }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis type="number" tickFormatter={(value) => Math.round(value).toString()} />
+                <YAxis type="category" dataKey="state" width={80} />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Legend />
+                <Bar dataKey="suspected" fill="var(--color-suspected)" />
+                <Bar dataKey="confirmed" fill="var(--color-confirmed)" />
+                <Bar dataKey="deaths" fill="var(--color-deaths)" />
+              </BarChart>
             </ChartContainer>
           )}
         </CardContent>

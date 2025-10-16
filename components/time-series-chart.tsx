@@ -1,7 +1,7 @@
 "use client"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Line, LineChart, CartesianGrid, XAxis, YAxis, Legend, ResponsiveContainer } from "recharts"
+import { Line, LineChart, CartesianGrid, XAxis, YAxis, Legend } from "recharts"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 
 interface TimeSeriesChartProps {
@@ -48,50 +48,48 @@ export default function TimeSeriesChart({ data, selectedState = 'All States' }: 
                 color: "hsl(var(--chart-3))",
               },
             }}
-            className="h-[400px]"
+            className="h-[320px] md:h-[380px]"
           >
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={formattedData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="weekLabel" interval="preserveStartEnd" minTickGap={30} />
-                <YAxis tickFormatter={(value) => Math.round(value).toString()} />
-                <ChartTooltip
-                  content={
-                    <ChartTooltipContent
-                      labelFormatter={(label) => {
-                        const weekData = formattedData.find((d) => d.weekLabel === label)
-                        return weekData ? weekData.week_formatted || weekData.week : label
-                      }}
-                    />
-                  }
-                />
-                <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="suspected"
-                  stroke="var(--color-suspected)"
-                  strokeWidth={2}
-                  dot={{ r: 2 }}
-                  activeDot={{ r: 6 }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="confirmed"
-                  stroke="var(--color-confirmed)"
-                  strokeWidth={2}
-                  dot={{ r: 2 }}
-                  activeDot={{ r: 6 }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="deaths"
-                  stroke="var(--color-deaths)"
-                  strokeWidth={2}
-                  dot={{ r: 2 }}
-                  activeDot={{ r: 6 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            <LineChart data={formattedData} margin={{ top: 8, right: 16, left: 16, bottom: 16 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="weekLabel" interval="preserveStartEnd" minTickGap={24} />
+              <YAxis tickFormatter={(value) => Math.round(value).toString()} />
+              <ChartTooltip
+                content={
+                  <ChartTooltipContent
+                    labelFormatter={(label) => {
+                      const weekData = formattedData.find((d) => d.weekLabel === label)
+                      return weekData ? weekData.week_formatted || weekData.week : label
+                    }}
+                  />
+                }
+              />
+              <Legend />
+              <Line
+                type="monotone"
+                dataKey="suspected"
+                stroke="var(--color-suspected)"
+                strokeWidth={2}
+                dot={{ r: 2 }}
+                activeDot={{ r: 6 }}
+              />
+              <Line
+                type="monotone"
+                dataKey="confirmed"
+                stroke="var(--color-confirmed)"
+                strokeWidth={2}
+                dot={{ r: 2 }}
+                activeDot={{ r: 6 }}
+              />
+              <Line
+                type="monotone"
+                dataKey="deaths"
+                stroke="var(--color-deaths)"
+                strokeWidth={2}
+                dot={{ r: 2 }}
+                activeDot={{ r: 6 }}
+              />
+            </LineChart>
           </ChartContainer>
         )}
       </CardContent>
