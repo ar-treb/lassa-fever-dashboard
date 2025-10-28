@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { differenceInDays, parseISO } from "date-fns"
 
 import { fetchLassaSummary } from "@/lib/reports"
+import { fetchWeeklyCoverage } from "@/lib/data"
 import { formatDateRange } from "@/lib/utils"
 import { generateStructuredReport, ReportGenerationError } from "@/lib/llm/report_client"
 
@@ -58,15 +59,39 @@ export async function POST(request: Request) {
 
     const rangeLabel = formatDateRange(startDate, endDate)
 
-    const report = await generateStructuredReport(summary, {
+    const coverage = await fetchWeeklyCoverage(
+      startDate.toISOString().slice(0, 10),
+      endDate.toISOString().slice(0, 10),
+      states
+    )
+
+    // Compute averages per reported week (prefer actual published weeks; fallback to window length)
+    const totalDays = differenceInDays(endDate, startDate) + 1
+    const totalWeeksCeil = Math.max(1, Math.ceil(totalDays / 7))
+    const weeksReported = (coverage.availableWeekLabels?.length ?? 0) > 0
+      ? coverage.availableWeekLabels.length
+      : totalWeeksCeil
+
+    const adjustedSummary = {
+      ...summary,
+      averages: {
+        confirmed: summary.totals.confirmed / weeksReported,
+        suspected: summary.totals.suspected / weeksReported,
+        deaths: summary.totals.deaths / weeksReported,
+      },
+    }
+
+    const report = await generateStructuredReport(adjustedSummary, {
       rangeLabel,
       additionalContext: body.focus ?? undefined,
+      coverageWeeks: coverage.availableWeekLabels,
     })
 
     return NextResponse.json({
-      summary,
+      summary: adjustedSummary,
       rangeLabel,
       report,
+      coverage,
     })
   } catch (error) {
     if (error instanceof ReportGenerationError) {

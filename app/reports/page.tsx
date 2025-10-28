@@ -35,10 +35,11 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 
-import { fetchAvailableStates } from "@/lib/data"
+import { fetchAvailableStates, fetchWeeklyCoverage } from "@/lib/data"
 import type { LassaSummary } from "@/lib/reports"
 import type { ReportSections } from "@/lib/llm/report_template"
-import { formatNumber } from "@/lib/utils"
+import { formatCoverageLabel, formatNumber } from "@/lib/utils"
+import TimeSeriesChart from "@/components/time-series-chart"
 
 type ReportProvider = "openai" | "gemini"
 
@@ -49,6 +50,9 @@ interface ReportApiSuccess {
     provider: ReportProvider
     sections: ReportSections
     rawText: string
+  }
+  coverage?: {
+    availableWeekLabels: string[]
   }
 }
 
@@ -79,7 +83,10 @@ export default function ReportsPage() {
   const [isFetchingStates, setIsFetchingStates] = useState<boolean>(true)
   const [error, setError] = useState<string>("")
   const [infoMessage, setInfoMessage] = useState<string>("")
-  const [result, setResult] = useState<ReportApiSuccess | null>(null)
+  const [result, setResult] = useState<(ReportApiSuccess & { coverageLabel?: string | null }) | null>(null)
+  const [timeSeries, setTimeSeries] = useState<
+    Array<{ week: string; week_formatted: string; suspected: number; confirmed: number; deaths: number }>
+  >([])
 
   useEffect(() => {
     async function loadStates() {
@@ -161,6 +168,7 @@ export default function ReportsPage() {
     setError("")
     setInfoMessage("")
     setResult(null)
+    setTimeSeries([])
 
     try {
       const response = await fetch("/api/report", {
@@ -189,7 +197,20 @@ export default function ReportsPage() {
         return
       }
 
-      setResult(data as ReportApiSuccess)
+      const success = data as ReportApiSuccess & {
+        coverage?: {
+          availableWeekLabels: string[]
+          weeklySeries?: Array<{ week: string; week_formatted: string; suspected: number; confirmed: number; deaths: number }>
+        }
+      }
+      const totalWeeks = success.summary.periodStart && success.summary.periodEnd
+        ? calculateWeeksCount(success.summary.periodStart, success.summary.periodEnd)
+        : null
+      const publishedWeeks = success.coverage?.availableWeekLabels?.length ?? null
+      const label = formatCoverageLabel(publishedWeeks, totalWeeks)
+
+      setResult({ ...success, coverageLabel: label })
+      setTimeSeries(success.coverage?.weeklySeries ?? [])
     } catch (fetchError) {
       console.error("Report generation failed", fetchError)
       setError("Unexpected error generating report. Please try again.")
@@ -341,6 +362,10 @@ export default function ReportsPage() {
       ) : null}
 
       {result ? <ReportResultCard result={result} /> : null}
+
+      {timeSeries.length > 0 ? (
+        <TimeSeriesChart data={timeSeries} selectedState={selectedStatesLabel} />
+      ) : null}
     </div>
   )
 }
@@ -434,7 +459,7 @@ function AlertCard({ title, description, variant }: AlertCardProps) {
 }
 
 interface ReportResultCardProps {
-  result: ReportApiSuccess
+  result: ReportApiSuccess & { coverageLabel?: string | null }
 }
 
 function ReportResultCard({ result }: ReportResultCardProps) {
@@ -449,6 +474,9 @@ function ReportResultCard({ result }: ReportResultCardProps) {
             <span className="text-sm font-normal text-muted-foreground">
               {summary.state} · {rangeLabel}
             </span>
+            {result.coverageLabel ? (
+              <span className="text-xs font-normal text-muted-foreground">{result.coverageLabel}</span>
+            ) : null}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -513,7 +541,7 @@ function MetricCard({ label, value, delta, average }: MetricCardProps) {
         <h3 className="text-sm font-medium text-muted-foreground">{label}</h3>
         <p className="text-2xl font-semibold">{formatNumber(value)}</p>
         <div className="text-sm text-muted-foreground">Week-over-week change: {deltaLabel}</div>
-        <div className="text-sm text-muted-foreground">Average per week: {formatNumber(average, { maximumFractionDigits: 2 })}</div>
+        <div className="text-sm text-muted-foreground">Average per reported week: {formatNumber(average, { maximumFractionDigits: 2 })}</div>
       </div>
     </div>
   )
@@ -553,6 +581,32 @@ function formatDelta(value: number) {
   if (rounded === 0) return "0%"
   if (rounded > 0) return `+${rounded}%`
   return `${rounded}%`
+}
+
+function calculateWeeksCount(startISO: string, endISO: string) {
+  if (!startISO || !endISO) return null
+
+  const start = new Date(startISO)
+  const end = new Date(endISO)
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return null
+  }
+
+  const diffMs = end.getTime() - start.getTime()
+
+  if (!Number.isFinite(diffMs) || diffMs < 0) {
+    return null
+  }
+
+  const msPerDay = 1000 * 60 * 60 * 24
+  const days = diffMs / msPerDay + 1
+
+  if (!Number.isFinite(days) || days <= 0) {
+    return null
+  }
+
+  return Math.max(1, Math.ceil(days / 7))
 }
 
 interface DateRangePickerProps {

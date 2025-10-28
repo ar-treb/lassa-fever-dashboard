@@ -36,3 +36,19 @@ export function calculatePercentageChange(current: number | null | undefined, pr
 
   return ((currentValue - previousValue) / Math.abs(previousValue)) * 100
 }
+
+export function formatCoverageLabel(publishedWeeks: number | null | undefined, totalWeeks: number | null | undefined) {
+  if (!publishedWeeks || publishedWeeks <= 0) {
+    return null
+  }
+
+  if (!totalWeeks || totalWeeks <= 0) {
+    return `${formatNumber(publishedWeeks, { maximumFractionDigits: 0 })} published week${
+      publishedWeeks === 1 ? "" : "s"
+    }`
+  }
+
+  return `${formatNumber(publishedWeeks, { maximumFractionDigits: 0 })} of ${formatNumber(totalWeeks, {
+    maximumFractionDigits: 0,
+  })} weeks reported`
+}

@@ -1,3 +1,5 @@
+import { addDays, addWeeks, getISOWeekYear, isAfter, isBefore, startOfISOWeek } from "date-fns"
+
 import { createSupabaseClient } from "./supabase"
 
 export interface LassaFeverData {
@@ -9,6 +11,17 @@ export interface LassaFeverData {
   suspected: number
   confirmed: number
   deaths: number
+}
+
+type LassaDataRow = {
+  id: string | number | null
+  year: number | null
+  full_year: number | null
+  week: number | null
+  states: string | null
+  suspected: number | null
+  confirmed: number | null
+  deaths: number | null
 }
 
 export async function fetchLassaFeverData(year?: string, week?: string, state?: string): Promise<LassaFeverData[]> {
@@ -46,7 +59,7 @@ export async function fetchLassaFeverData(year?: string, week?: string, state?: 
   }
 
   return (data ?? [])
-    .map((item: any) => {
+    .map((item: LassaDataRow) => {
       const fullYear = item.full_year ?? item.year
       const weekNumber = item.week ?? null
       const weekLabel = formatWeekLabel(fullYear, weekNumber)
@@ -116,6 +129,117 @@ export async function fetchAvailableStates(): Promise<string[]> {
   return (data ?? [])
     .map((item: { state: string | null }) => (item.state ? String(item.state) : null))
     .filter((state): state is string => !!state)
+}
+
+type CoverageRow = {
+  full_year: number | null
+  week: number | null
+  states: string | null
+  suspected: number | null
+  confirmed: number | null
+  deaths: number | null
+}
+
+export async function fetchWeeklyCoverage(
+  startISO: string,
+  endISO: string,
+  states?: string[]
+): Promise<{
+  availableWeekLabels: string[]
+  weeklySeries: Array<{
+    week: string
+    week_formatted: string
+    suspected: number
+    confirmed: number
+    deaths: number
+  }>
+}> {
+  const supabase = createSupabaseClient()
+
+  const startDate = new Date(startISO)
+  const endDate = new Date(endISO)
+
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || isAfter(startDate, endDate)) {
+    return { availableWeekLabels: [] }
+  }
+
+  const yearsToFetch = new Set<number>()
+  let cursor = startOfISOWeek(startDate)
+
+  while (!isAfter(cursor, endDate)) {
+    yearsToFetch.add(getISOWeekYear(cursor))
+    cursor = addWeeks(cursor, 1)
+  }
+  yearsToFetch.add(getISOWeekYear(endDate))
+
+  let query = supabase
+    .from("lassa_data")
+    .select("full_year, week, states, suspected, confirmed, deaths")
+    .neq("states", "Total")
+
+  if (yearsToFetch.size > 0) {
+    query = query.in("full_year", Array.from(yearsToFetch))
+  }
+
+  const stateFilters = (states ?? []).filter((state) => state && state !== "All States")
+
+  if (stateFilters.length > 0) {
+    query = query.in("states", stateFilters)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    console.error("Error fetching weekly coverage:", error)
+    return { availableWeekLabels: [] }
+  }
+
+  const availableWeeks = new Set<string>()
+  const weeklyTotals = new Map<string, { suspected: number; confirmed: number; deaths: number }>()
+
+  for (const row of (data ?? []) as CoverageRow[]) {
+    const year = toInteger(row.full_year)
+    const week = toInteger(row.week)
+
+    if (year === null || week === null) {
+      continue
+    }
+
+    const weekStart = getIsoWeekStart(year, week)
+    const weekEnd = addDays(weekStart, 6)
+
+    if (isBefore(weekEnd, startDate) || isAfter(weekStart, endDate)) {
+      continue
+    }
+
+    const weekKey = `${year}-W${week.toString().padStart(2, "0")}`
+    availableWeeks.add(weekKey)
+
+    const existing = weeklyTotals.get(weekKey) ?? { suspected: 0, confirmed: 0, deaths: 0 }
+    existing.suspected += toNumber(row.suspected)
+    existing.confirmed += toNumber(row.confirmed)
+    existing.deaths += toNumber(row.deaths)
+    weeklyTotals.set(weekKey, existing)
+  }
+
+  const availableWeekLabels = Array.from(availableWeeks).sort((a, b) => a.localeCompare(b))
+  const weeklySeries = Array.from(weeklyTotals.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([weekKey, totals]) => ({
+      week: weekKey,
+      week_formatted: weekKey,
+      suspected: totals.suspected,
+      confirmed: totals.confirmed,
+      deaths: totals.deaths,
+    }))
+
+  return { availableWeekLabels, weeklySeries }
+}
+
+function getIsoWeekStart(year: number, week: number) {
+  const firstThursday = new Date(year, 0, 4)
+  const firstWeekStart = startOfISOWeek(firstThursday)
+  return addWeeks(firstWeekStart, week - 1)
 }
 
 function formatWeekLabel(fullYear: number | string | null, week: number | string | null): string | null {
