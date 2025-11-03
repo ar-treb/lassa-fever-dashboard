@@ -29,7 +29,6 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Textarea } from "@/components/ui/textarea"
 import { Calendar } from "@/components/ui/calendar"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -66,6 +65,37 @@ type StateMode = "all" | "single" | "multi"
 
 const DATE_DISPLAY_FORMAT = "MMM d, yyyy"
 
+const REPORT_FOCUS_OPTIONS = [
+  {
+    value: "general",
+    label: "General situational overview",
+    description: "Balanced readout of confirmed, suspected, and deaths without extra emphasis.",
+    prompt:
+      "Provide a balanced situational overview of confirmed, suspected, and fatal cases without focusing on a single state or metric.",
+  },
+  {
+    value: "escalation",
+    label: "Escalating activity focus",
+    description: "Stress detection of rapid increases and highlight emerging hotspots.",
+    prompt:
+      "Prioritize identifying rapidly increasing case counts or emerging hotspots. Flag any weeks or states that show sharp growth or require urgent monitoring.",
+  },
+  {
+    value: "severity",
+    label: "Severity and outcomes focus",
+    description: "Emphasize deaths and severe outcomes, connecting to care readiness.",
+    prompt:
+      "Concentrate on severe outcomes and deaths. Discuss mortality patterns, care capacity implications, and readiness for case management.",
+  },
+  {
+    value: "data-quality",
+    label: "Data quality & completeness focus",
+    description: "Call out reporting gaps or volatility that may hinder interpretation.",
+    prompt:
+      "Evaluate data quality, completeness, and volatility. Highlight where reporting gaps or inconsistencies could limit interpretation and recommend follow-up.",
+  },
+] as const
+
 export default function ReportsPage() {
   const today = useMemo(() => new Date(), [])
   const initialTo = useMemo(() => today, [today])
@@ -76,7 +106,7 @@ export default function ReportsPage() {
   const [selectedState, setSelectedState] = useState<string>("")
   const [selectedStates, setSelectedStates] = useState<string[]>([])
   const [dateRange, setDateRange] = useState<DateRange | undefined>({ from: initialFrom, to: initialTo })
-  const [additionalContext, setAdditionalContext] = useState<string>("")
+  const [selectedFocus, setSelectedFocus] = useState<(typeof REPORT_FOCUS_OPTIONS)[number]["value"]>("general")
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false)
 
   const [isLoading, setIsLoading] = useState<boolean>(false)
@@ -143,6 +173,11 @@ export default function ReportsPage() {
     return `${selectedStates.length} states selected`
   }, [selectedState, selectedStates, stateMode])
 
+  const activeFocus = useMemo(
+    () => REPORT_FOCUS_OPTIONS.find((option) => option.value === selectedFocus) ?? REPORT_FOCUS_OPTIONS[0],
+    [selectedFocus]
+  )
+
   async function handleGenerateReport() {
     if (!hasValidDateRange) {
       setError("Please select a start and end date.")
@@ -180,7 +215,7 @@ export default function ReportsPage() {
           startDate,
           endDate,
           states: statesPayload,
-          focus: additionalContext.trim() || undefined,
+          focus: activeFocus?.prompt,
         }),
       })
 
@@ -312,14 +347,25 @@ export default function ReportsPage() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="report-context">Optional focus</Label>
-            <Textarea
-              id="report-context"
-              placeholder="Highlight anything specific you want the LLM to address (e.g., focus on Edo rapid increase)."
-              value={additionalContext}
-              onChange={(event) => setAdditionalContext(event.target.value)}
-              rows={3}
-            />
+            <Label htmlFor="report-focus">Report focus</Label>
+            <Select
+              value={selectedFocus}
+              onValueChange={(value) =>
+                setSelectedFocus(value as (typeof REPORT_FOCUS_OPTIONS)[number]["value"])
+              }
+            >
+              <SelectTrigger id="report-focus">
+                <SelectValue placeholder="Choose a focus" />
+              </SelectTrigger>
+              <SelectContent>
+                {REPORT_FOCUS_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground leading-relaxed">{activeFocus.description}</p>
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-4">
@@ -762,5 +808,3 @@ function DateRangePicker({ value, onChange, maxDate, onComplete }: DateRangePick
     </Tabs>
   )
 }
-
-
