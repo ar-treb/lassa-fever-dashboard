@@ -1,118 +1,31 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import {
-  endOfMonth,
-  endOfQuarter,
-  endOfYear,
-  format,
-  isSameDay,
-  startOfMonth,
-  startOfQuarter,
-  startOfYear,
-  subMonths,
-  subQuarters,
-  subWeeks,
-  subYears,
-} from "date-fns"
+import { format, subWeeks } from "date-fns"
 import type { DateRange } from "react-day-picker"
 import { Loader2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Calendar } from "@/components/ui/calendar"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 
 import { fetchAvailableStates } from "@/lib/data"
-import type { LassaSummary } from "@/lib/reports"
-import type { ReportSections } from "@/lib/llm/report_template"
-import { formatCoverageLabel, formatNumber } from "@/lib/utils"
+import { formatCoverageLabel, calculateWeeksCount } from "@/lib/utils"
+import { DATE_DISPLAY_FORMAT, REPORT_FOCUS_OPTIONS } from "@/lib/constants/report-focus"
+import type { ReportApiSuccess, ReportApiResponse, StateMode } from "@/lib/types/reports"
+
 import TimeSeriesChart from "@/components/time-series-chart"
-
-type ReportProvider = "openai" | "gemini"
-
-interface ReportApiSuccess {
-  summary: LassaSummary
-  rangeLabel: string
-  report: {
-    provider: ReportProvider
-    sections: ReportSections
-    rawText: string
-  }
-  coverage?: {
-    availableWeekLabels: string[]
-    missingWeekLabels?: string[]
-    weeklySeries?: Array<{ week: string; week_formatted: string; suspected: number; confirmed: number; deaths: number }>
-    coverageRatio?: number | null
-    totalWeeks?: number | null
-    topContributors?: Array<{
-      state: string
-      confirmed: number
-      suspected: number
-      deaths: number
-      shareOfConfirmed?: number
-    }>
-    fastestGrowers?: Array<{
-      state: string
-      week?: string
-      weekOverWeekChange: number
-    }>
-    alertFlags?: Record<string, boolean>
-    notableSignals?: string[]
-  }
-}
-
-interface ReportApiError {
-  error: string
-}
-
-type ReportApiResponse = ReportApiSuccess | ReportApiError | { summary: null; message: string; report: null }
-
-type StateMode = "all" | "single" | "multi"
-
-const DATE_DISPLAY_FORMAT = "MMM d, yyyy"
-
-const REPORT_FOCUS_OPTIONS = [
-  {
-    value: "general",
-    label: "General situational overview",
-    description: "Balanced readout of confirmed, suspected, and deaths without extra emphasis.",
-    prompt:
-      "Provide a balanced situational overview of confirmed, suspected, and fatal cases without focusing on a single state or metric.",
-  },
-  {
-    value: "escalation",
-    label: "Escalating activity focus",
-    description: "Stress detection of rapid increases and highlight emerging hotspots.",
-    prompt:
-      "Prioritize identifying rapidly increasing case counts or emerging hotspots. Flag any weeks or states that show sharp growth or require urgent monitoring.",
-  },
-  {
-    value: "severity",
-    label: "Severity and outcomes focus",
-    description: "Emphasize deaths and severe outcomes, connecting to care readiness.",
-    prompt:
-      "Concentrate on severe outcomes and deaths. Discuss mortality patterns, care capacity implications, and readiness for case management.",
-  },
-  {
-    value: "data-quality",
-    label: "Data quality & completeness focus",
-    description: "Call out reporting gaps or volatility that may hinder interpretation.",
-    prompt:
-      "Evaluate data quality, completeness, and volatility. Highlight where reporting gaps or inconsistencies could limit interpretation and recommend follow-up.",
-  },
-] as const
+import { AlertCard } from "@/components/reports/alert-card"
+import { StateMultiSelect } from "@/components/reports/state-multi-select"
+import { ReportResultCard } from "@/components/reports/report-result-card"
+import { DateRangePicker } from "@/components/reports/date-range-picker"
+import { DownloadPDFButton } from "@/components/reports/download-pdf-button"
 
 export default function ReportsPage() {
   const today = useMemo(() => new Date(), [])
@@ -421,404 +334,25 @@ export default function ReportsPage() {
         <AlertCard title="No data" description={infoMessage} variant="default" />
       ) : null}
 
-      {result ? <ReportResultCard result={result} /> : null}
+      {result ? (
+        <div className="space-y-4">
+          <div className="flex justify-end">
+            <DownloadPDFButton
+              result={result}
+              dateRange={displayDateRange}
+              statesLabel={selectedStatesLabel}
+              focusLabel={activeFocus.label}
+            />
+          </div>
+          <ReportResultCard result={result} />
+        </div>
+      ) : null}
 
       {timeSeries.length > 0 ? (
-        <TimeSeriesChart data={timeSeries} selectedState={selectedStatesLabel} />
+        <div id="report-chart">
+          <TimeSeriesChart data={timeSeries} selectedState={selectedStatesLabel} />
+        </div>
       ) : null}
     </div>
-  )
-}
-
-interface StateMultiSelectProps {
-  states: string[]
-  value: string[]
-  onChange: (next: string[]) => void
-  disabled?: boolean
-  label: string
-}
-
-function StateMultiSelect({ states, value, onChange, disabled, label }: StateMultiSelectProps) {
-  const [open, setOpen] = useState(false)
-
-  const toggleValue = (stateName: string) => {
-    onChange(
-      value.includes(stateName)
-        ? value.filter((item) => item !== stateName)
-        : [...value, stateName]
-    )
-  }
-
-  const clearSelection = () => {
-    onChange([])
-  }
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          disabled={disabled}
-          className="w-full justify-between"
-        >
-          {label}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="p-0" align="start">
-        <Command>
-          <CommandInput placeholder="Search states..." />
-          <CommandList>
-            <CommandEmpty>No states found.</CommandEmpty>
-            <CommandGroup>
-              <CommandItem onSelect={clearSelection} className="cursor-pointer font-medium text-primary">
-                Clear selection
-              </CommandItem>
-              <Separator className="my-1" />
-              {states.map((state) => {
-                const isChecked = value.includes(state)
-                return (
-                  <CommandItem
-                    key={state}
-                    onSelect={() => toggleValue(state)}
-                    className="flex cursor-pointer items-center gap-2"
-                  >
-                    <Checkbox checked={isChecked} className="pointer-events-none" />
-                    <span>{state}</span>
-                  </CommandItem>
-                )
-              })}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
-  )
-}
-
-interface AlertCardProps {
-  title: string
-  description: string
-  variant: "default" | "destructive"
-}
-
-function AlertCard({ title, description, variant }: AlertCardProps) {
-  const isDestructive = variant === "destructive"
-
-  return (
-    <Card className={isDestructive ? "border-destructive/50 bg-destructive/10" : undefined}>
-      <CardHeader>
-        <CardTitle className={isDestructive ? "text-destructive" : undefined}>{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className={isDestructive ? "text-destructive" : "text-muted-foreground"}>{description}</p>
-      </CardContent>
-    </Card>
-  )
-}
-
-interface ReportResultCardProps {
-  result: ReportApiSuccess & { coverageLabel?: string | null }
-}
-
-function ReportResultCard({ result }: ReportResultCardProps) {
-  const { summary, rangeLabel, report } = result
-
-  return (
-    <div className="space-y-6 pb-10">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex flex-col gap-1">
-            <span>Summary metrics</span>
-            <span className="text-sm font-normal text-muted-foreground">
-              {summary.state} · {rangeLabel}
-            </span>
-            {result.coverageLabel ? (
-              <span className="text-xs font-normal text-muted-foreground">{result.coverageLabel}</span>
-            ) : null}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-3">
-            <MetricCard
-              label="Confirmed cases"
-              value={summary.totals.confirmed}
-              delta={summary.deltas.confirmed}
-              average={summary.averages.confirmed}
-            />
-            <MetricCard
-              label="Suspected cases"
-              value={summary.totals.suspected}
-              delta={summary.deltas.suspected}
-              average={summary.averages.suspected}
-            />
-            <MetricCard
-              label="Deaths"
-              value={summary.totals.deaths}
-              delta={summary.deltas.deaths}
-              average={summary.averages.deaths}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex flex-wrap items-center justify-between gap-2">
-            <span>Generated narrative</span>
-            <span className="text-sm font-normal text-muted-foreground">Provider: {report.provider}</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <section className="space-y-2">
-            <h3 className="text-lg font-semibold">Overview</h3>
-            <p className="text-muted-foreground leading-relaxed">{report.sections.overview}</p>
-          </section>
-
-          <SectionList title="Key findings" items={report.sections.keyFindings} />
-          <SectionList title="Trends" items={report.sections.trends} />
-          <SectionList title="Recommendations" items={report.sections.recommendations} />
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
-
-interface MetricCardProps {
-  label: string
-  value: number
-  delta: number
-  average: number
-}
-
-function MetricCard({ label, value, delta, average }: MetricCardProps) {
-  const deltaLabel = formatDelta(delta)
-
-  return (
-    <div className="rounded-lg border bg-muted/40 p-4">
-      <div className="space-y-1">
-        <h3 className="text-sm font-medium text-muted-foreground">{label}</h3>
-        <p className="text-2xl font-semibold">{formatNumber(value)}</p>
-        <div className="text-sm text-muted-foreground">Week-over-week change: {deltaLabel}</div>
-        <div className="text-sm text-muted-foreground">Average per reported week: {formatNumber(average, { maximumFractionDigits: 0 })}</div>
-      </div>
-    </div>
-  )
-}
-
-interface SectionListProps {
-  title: string
-  items: string[]
-}
-
-function SectionList({ title, items }: SectionListProps) {
-  if (!items.length) {
-    return null
-  }
-
-  return (
-    <section className="space-y-2">
-      <h3 className="text-lg font-semibold">{title}</h3>
-      <ul className="space-y-2">
-        {items.map((item, index) => (
-          <li key={`${title}-${index}`} className="text-muted-foreground">
-            • {item}
-          </li>
-        ))}
-      </ul>
-    </section>
-  )
-}
-
-function formatDelta(value: number) {
-  if (!Number.isFinite(value)) {
-    return "0%"
-  }
-
-  const rounded = Math.round(value * 10) / 10
-
-  if (rounded === 0) return "0%"
-  if (rounded > 0) return `+${rounded}%`
-  return `${rounded}%`
-}
-
-function calculateWeeksCount(startISO: string, endISO: string) {
-  if (!startISO || !endISO) return null
-
-  const start = new Date(startISO)
-  const end = new Date(endISO)
-
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-    return null
-  }
-
-  const diffMs = end.getTime() - start.getTime()
-
-  if (!Number.isFinite(diffMs) || diffMs < 0) {
-    return null
-  }
-
-  const msPerDay = 1000 * 60 * 60 * 24
-  const days = diffMs / msPerDay + 1
-
-  if (!Number.isFinite(days) || days <= 0) {
-    return null
-  }
-
-  return Math.max(1, Math.ceil(days / 7))
-}
-
-interface DateRangePickerProps {
-  value: DateRange | undefined
-  onChange: (range: DateRange | undefined) => void
-  maxDate: Date
-  onComplete?: () => void
-}
-
-function DateRangePicker({ value, onChange, maxDate, onComplete }: DateRangePickerProps) {
-  const months = useMemo(() => {
-    const entries: { label: string; range: DateRange }[] = []
-    for (let i = 0; i < 12; i += 1) {
-      const monthStart = startOfMonth(subMonths(maxDate, i))
-      const monthEnd = endOfMonth(monthStart)
-      entries.push({
-        label: format(monthStart, "MMM yyyy"),
-        range: { from: monthStart, to: monthEnd },
-      })
-    }
-    return entries
-  }, [maxDate])
-
-  const quarters = useMemo(() => {
-    const entries: { label: string; range: DateRange }[] = []
-    for (let i = 0; i < 8; i += 1) {
-      const quarterStart = startOfQuarter(subQuarters(maxDate, i))
-      const quarterEnd = endOfQuarter(quarterStart)
-      const quarterNumber = Math.floor(quarterStart.getMonth() / 3) + 1
-      entries.push({
-        label: `Q${quarterNumber} ${quarterStart.getFullYear()}`,
-        range: { from: quarterStart, to: quarterEnd },
-      })
-    }
-    return entries
-  }, [maxDate])
-
-  const years = useMemo(() => {
-    const entries: { label: string; range: DateRange }[] = []
-    for (let i = 0; i < 6; i += 1) {
-      const yearStart = startOfYear(subYears(maxDate, i))
-      const yearEnd = endOfYear(yearStart)
-      entries.push({
-        label: `${yearStart.getFullYear()}`,
-        range: { from: yearStart, to: yearEnd },
-      })
-    }
-    return entries
-  }, [maxDate])
-
-  const isSameRange = (range: DateRange) => {
-    if (!value?.from || !value?.to) return false
-    return isSameDay(range.from as Date, value.from) && isSameDay(range.to as Date, value.to)
-  }
-
-  const applyQuickRange = (range: DateRange) => {
-    onChange(range)
-    onComplete?.()
-  }
-
-  const handleCalendarSelect = (range: DateRange | undefined) => {
-    onChange(range)
-    if (range?.from && range?.to) {
-      onComplete?.()
-    }
-  }
-
-  return (
-    <Tabs defaultValue="custom" className="w-[640px]">
-      <TabsList className="grid w-full grid-cols-3">
-        <TabsTrigger value="custom">Custom</TabsTrigger>
-        <TabsTrigger value="quick-months">Months</TabsTrigger>
-        <TabsTrigger value="quick-ranges">Quarters & Years</TabsTrigger>
-      </TabsList>
-      <TabsContent value="custom" className="p-4 pt-2">
-        <Calendar
-          initialFocus
-          mode="range"
-          numberOfMonths={2}
-          selected={value}
-          onSelect={handleCalendarSelect}
-          disabled={(date) => date > maxDate}
-        />
-      </TabsContent>
-      <TabsContent value="quick-months" className="p-4 pt-2">
-        <ScrollArea className="h-[280px] pr-2">
-          <div className="grid gap-2">
-            {months.map((option) => (
-              <button
-                key={option.label}
-                type="button"
-                onClick={() => applyQuickRange(option.range)}
-                className={cn(
-                  "flex items-center justify-between rounded-md border px-3 py-2 text-left text-sm transition-colors hover:bg-accent",
-                  isSameRange(option.range) ? "border-primary bg-primary/10" : "border-border"
-                )}
-              >
-                <span>{option.label}</span>
-                <span className="text-muted-foreground text-xs">
-                  {format(option.range.from as Date, "MMM d")} – {format(option.range.to as Date, "MMM d")}
-                </span>
-              </button>
-            ))}
-          </div>
-        </ScrollArea>
-      </TabsContent>
-      <TabsContent value="quick-ranges" className="p-4 pt-2">
-        <div className="space-y-4">
-          <section>
-            <h4 className="mb-2 text-sm font-semibold text-muted-foreground">Recent quarters</h4>
-            <div className="grid gap-2">
-              {quarters.map((option) => (
-                <button
-                  key={option.label}
-                  type="button"
-                  onClick={() => applyQuickRange(option.range)}
-                  className={cn(
-                    "flex items-center justify-between rounded-md border px-3 py-2 text-left text-sm transition-colors hover:bg-accent",
-                    isSameRange(option.range) ? "border-primary bg-primary/10" : "border-border"
-                  )}
-                >
-                  <span>{option.label}</span>
-                  <span className="text-muted-foreground text-xs">
-                    {format(option.range.from as Date, "MMM d")} – {format(option.range.to as Date, "MMM d")}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </section>
-          <section>
-            <h4 className="mb-2 text-sm font-semibold text-muted-foreground">Recent years</h4>
-            <div className="grid gap-2">
-              {years.map((option) => (
-                <button
-                  key={option.label}
-                  type="button"
-                  onClick={() => applyQuickRange(option.range)}
-                  className={cn(
-                    "flex items-center justify-between rounded-md border px-3 py-2 text-left text-sm transition-colors hover:bg-accent",
-                    isSameRange(option.range) ? "border-primary bg-primary/10" : "border-border"
-                  )}
-                >
-                  <span>{option.label}</span>
-                  <span className="text-muted-foreground text-xs">
-                    {format(option.range.from as Date, "MMM d yyyy")} – {format(option.range.to as Date, "MMM d yyyy")}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </section>
-        </div>
-      </TabsContent>
-    </Tabs>
   )
 }

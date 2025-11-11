@@ -52,3 +52,41 @@ export function formatCoverageLabel(publishedWeeks: number | null | undefined, t
     maximumFractionDigits: 0,
   })} weeks reported`
 }
+
+export function formatDelta(value: number) {
+  if (!Number.isFinite(value)) {
+    return "0%"
+  }
+
+  const rounded = Math.round(value * 10) / 10
+
+  if (rounded === 0) return "0%"
+  if (rounded > 0) return `+${rounded}%`
+  return `${rounded}%`
+}
+
+export function calculateWeeksCount(startISO: string, endISO: string) {
+  if (!startISO || !endISO) return null
+
+  const start = new Date(startISO)
+  const end = new Date(endISO)
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return null
+  }
+
+  const diffMs = end.getTime() - start.getTime()
+
+  if (!Number.isFinite(diffMs) || diffMs < 0) {
+    return null
+  }
+
+  const msPerDay = 1000 * 60 * 60 * 24
+  const days = diffMs / msPerDay + 1
+
+  if (!Number.isFinite(days) || days <= 0) {
+    return null
+  }
+
+  return Math.max(1, Math.ceil(days / 7))
+}
