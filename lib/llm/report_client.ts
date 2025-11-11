@@ -1,5 +1,10 @@
 import type { LassaSummary } from "../reports"
-import { buildReportPrompt, type ReportPromptOptions, type ReportSections } from "./report_template"
+import {
+  buildReportPrompt,
+  DEFAULT_REPORT_SCHEMA_VERSION,
+  type ReportPromptOptions,
+  type ReportSections,
+} from "./report_template"
 
 export type ReportLLMProvider = "openai" | "gemini"
 
@@ -50,26 +55,28 @@ function getGeminiConfig() {
   }
 }
 
-function parseSections(raw: string): ReportSections {
+function parseSections(raw: string, fallback: ReportSections): ReportSections {
   try {
     const parsed = JSON.parse(raw)
 
     if (
       typeof parsed === "object" &&
       parsed !== null &&
-      typeof parsed.overview === "string" &&
-      Array.isArray(parsed.keyFindings) &&
-      Array.isArray(parsed.trends) &&
-      Array.isArray(parsed.recommendations)
+      typeof parsed.overview === "string"
     ) {
       return {
+        schemaVersion:
+          typeof parsed.schemaVersion === "number" ? parsed.schemaVersion : fallback.schemaVersion ?? DEFAULT_REPORT_SCHEMA_VERSION,
         overview: parsed.overview,
-        keyFindings: parsed.keyFindings.map(String),
-        trends: parsed.trends.map(String),
-        recommendations: parsed.recommendations.map(String),
+        keyFindings: normalizeStringArray(parsed.keyFindings, fallback.keyFindings),
+        trends: normalizeStringArray(parsed.trends, fallback.trends),
+        recommendations: normalizeStringArray(parsed.recommendations, fallback.recommendations),
+        dataQuality: normalizeStringArray(parsed.dataQuality, fallback.dataQuality ?? []),
+        hotspots: normalizeStringArray(parsed.hotspots, fallback.hotspots ?? []),
+        risks: normalizeStringArray(parsed.risks, fallback.risks ?? []),
       }
     }
-  } catch (error) {
+  } catch (_error) {
     throw new ReportGenerationError("Model response could not be parsed as structured JSON")
   }
 
@@ -81,9 +88,11 @@ async function generateWithOpenAI(prompt: string) {
   const { OpenAI } = await import("openai")
 
   const client = new OpenAI({ apiKey })
-  const response = await client.responses.create({
+  const response = await (client as any).responses.create({
     model,
     input: prompt,
+    temperature: 0.2,
+    max_output_tokens: 1200,
     response_format: { type: "json_object" },
   })
 
@@ -104,15 +113,40 @@ async function generateWithGemini(prompt: string) {
   const generativeModel = genAI.getGenerativeModel({
     model,
     generationConfig: {
+      temperature: 0.2,
+      maxOutputTokens: 4096,
       responseMimeType: "application/json",
     },
   })
 
   const result = await generativeModel.generateContent(prompt)
-  const rawText = result.response?.text()?.trim()
+  const candidateFragments: string[] =
+    result.response?.candidates?.map((candidate) => {
+      const content = Array.isArray(candidate.content)
+        ? candidate.content
+        : candidate.content
+          ? [candidate.content]
+          : []
+
+      return content
+        .map((part: unknown) => {
+          if (typeof part === "string") return part
+          if (typeof part === "object" && part !== null && "text" in part) {
+            const textValue = (part as { text?: unknown }).text
+            return typeof textValue === "string" ? textValue : ""
+          }
+          return ""
+        })
+        .join("")
+    }) ?? []
+
+  const fallbackText = candidateFragments.join("").trim()
+
+  const rawText = result.response?.text()?.trim() ?? fallbackText
 
   if (!rawText) {
-    throw new ReportGenerationError("Gemini returned an empty response")
+    const finishReason = result.response?.candidates?.[0]?.finishReason ?? "unknown"
+    throw new ReportGenerationError(`Gemini returned an empty response (finish reason: ${finishReason})`)
   }
 
   return rawText
@@ -123,7 +157,7 @@ export async function generateStructuredReport(
   options: ReportPromptOptions
 ): Promise<GenerateReportResult> {
   const provider = resolveProviderFromEnv()
-  const { prompt, expectedStructure } = buildReportPrompt(summary, options)
+  const { prompt, expectedStructure, schemaVersion } = buildReportPrompt(summary, options)
 
   let rawText: string
 
@@ -133,20 +167,34 @@ export async function generateStructuredReport(
     rawText = await generateWithGemini(prompt)
   }
 
-  const sections = parseSections(rawText)
+  const sections = parseSections(rawText, expectedStructure)
 
   return {
     provider,
     sections: {
+      schemaVersion: sections.schemaVersion ?? schemaVersion,
       overview: sections.overview || expectedStructure.overview,
       keyFindings: sections.keyFindings?.length ? sections.keyFindings : expectedStructure.keyFindings,
       trends: sections.trends?.length ? sections.trends : expectedStructure.trends,
       recommendations: sections.recommendations?.length
         ? sections.recommendations
         : expectedStructure.recommendations,
+      dataQuality: sections.dataQuality ?? expectedStructure.dataQuality,
+      hotspots: sections.hotspots ?? expectedStructure.hotspots,
+      risks: sections.risks ?? expectedStructure.risks,
     },
     rawText,
   }
 }
 
+function normalizeStringArray(value: unknown, fallback: string[]): string[] {
+  if (!Array.isArray(value)) {
+    return fallback
+  }
 
+  const result = value
+    .map((item) => (typeof item === "string" ? item.trim() : String(item ?? "")))
+    .filter((item) => item.length > 0)
+
+  return result.length > 0 ? result : fallback
+}

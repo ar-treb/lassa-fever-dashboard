@@ -34,7 +34,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 
-import { fetchAvailableStates, fetchWeeklyCoverage } from "@/lib/data"
+import { fetchAvailableStates } from "@/lib/data"
 import type { LassaSummary } from "@/lib/reports"
 import type { ReportSections } from "@/lib/llm/report_template"
 import { formatCoverageLabel, formatNumber } from "@/lib/utils"
@@ -52,6 +52,24 @@ interface ReportApiSuccess {
   }
   coverage?: {
     availableWeekLabels: string[]
+    missingWeekLabels?: string[]
+    weeklySeries?: Array<{ week: string; week_formatted: string; suspected: number; confirmed: number; deaths: number }>
+    coverageRatio?: number | null
+    totalWeeks?: number | null
+    topContributors?: Array<{
+      state: string
+      confirmed: number
+      suspected: number
+      deaths: number
+      shareOfConfirmed?: number
+    }>
+    fastestGrowers?: Array<{
+      state: string
+      week?: string
+      weekOverWeekChange: number
+    }>
+    alertFlags?: Record<string, boolean>
+    notableSignals?: string[]
   }
 }
 
@@ -216,6 +234,7 @@ export default function ReportsPage() {
           endDate,
           states: statesPayload,
           focus: activeFocus?.prompt,
+          focusLabel: activeFocus?.label,
         }),
       })
 
@@ -232,12 +251,7 @@ export default function ReportsPage() {
         return
       }
 
-      const success = data as ReportApiSuccess & {
-        coverage?: {
-          availableWeekLabels: string[]
-          weeklySeries?: Array<{ week: string; week_formatted: string; suspected: number; confirmed: number; deaths: number }>
-        }
-      }
+      const success = data as ReportApiSuccess
       const totalWeeks = success.summary.periodStart && success.summary.periodEnd
         ? calculateWeeksCount(success.summary.periodStart, success.summary.periodEnd)
         : null
@@ -587,7 +601,7 @@ function MetricCard({ label, value, delta, average }: MetricCardProps) {
         <h3 className="text-sm font-medium text-muted-foreground">{label}</h3>
         <p className="text-2xl font-semibold">{formatNumber(value)}</p>
         <div className="text-sm text-muted-foreground">Week-over-week change: {deltaLabel}</div>
-        <div className="text-sm text-muted-foreground">Average per reported week: {formatNumber(average, { maximumFractionDigits: 2 })}</div>
+        <div className="text-sm text-muted-foreground">Average per reported week: {formatNumber(average, { maximumFractionDigits: 0 })}</div>
       </div>
     </div>
   )

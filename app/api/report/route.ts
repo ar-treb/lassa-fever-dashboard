@@ -71,6 +71,9 @@ export async function POST(request: Request) {
     const weeksReported = (coverage.availableWeekLabels?.length ?? 0) > 0
       ? coverage.availableWeekLabels.length
       : totalWeeksCeil
+    const totalWeeks = coverage.totalWeeks ?? totalWeeksCeil
+    const coverageRatio =
+      typeof coverage.coverageRatio === "number" ? coverage.coverageRatio : weeksReported / totalWeeks
 
     const adjustedSummary = {
       ...summary,
@@ -85,6 +88,20 @@ export async function POST(request: Request) {
       rangeLabel,
       additionalContext: body.focus ?? undefined,
       coverageWeeks: coverage.availableWeekLabels,
+      focusLabel: typeof body.focusLabel === "string" ? body.focusLabel : undefined,
+      metrics: {
+        totals: adjustedSummary.totals,
+        averages: adjustedSummary.averages,
+        deltas: adjustedSummary.deltas,
+        weeksReported,
+        totalWeeks,
+        coverageRatio: Number.isFinite(coverageRatio) ? Number(coverageRatio.toFixed(3)) : null,
+        missingWeeks: coverage.missingWeekLabels,
+        topContributors: coverage.topContributors,
+        fastestGrowers: coverage.fastestGrowers,
+        alertFlags: coverage.alertFlags,
+        notableSignals: coverage.notableSignals,
+      },
     })
 
     return NextResponse.json({
@@ -106,5 +123,4 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unexpected server error" }, { status: 500 })
   }
 }
-
 
