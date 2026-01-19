@@ -6,14 +6,17 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import type { LassaFeverData } from "@/lib/data"
 
+type PeriodMode = "week" | "month" | "quarter" | "year"
+
 interface WeeklySummaryProps {
   data: LassaFeverData[]
   week: string
   selectedState?: string
-  isFullYear?: boolean
+  periodMode?: PeriodMode
 }
 
-export default function WeeklySummary({ data, week, selectedState = 'All States', isFullYear = false }: WeeklySummaryProps) {
+export default function WeeklySummary({ data, week, selectedState = 'All States', periodMode = 'week' }: WeeklySummaryProps) {
+  const isAggregatedPeriod = periodMode !== 'week'
   // Aggregate totals
   const totals = data.reduce(
     (acc, item) => {
@@ -27,8 +30,8 @@ export default function WeeklySummary({ data, week, selectedState = 'All States'
 
   // Prepare data for bar chart
   const topStates = (() => {
-    // If full year data needs to be aggregated by state first to avoid duplicates
-    let processedData = isFullYear
+    // If aggregated period (month/quarter/year), data needs to be aggregated by state first to avoid duplicates
+    let processedData = isAggregatedPeriod
       ? Object.values(
           data.reduce((acc, item) => {
             if (!acc[item.state]) {
@@ -76,9 +79,12 @@ export default function WeeklySummary({ data, week, selectedState = 'All States'
     <div className="grid gap-6 md:grid-cols-2">
       <Card>
         <CardHeader>
-          <CardTitle>{isFullYear ? 'Yearly Summary: ' : 'Weekly Summary: '}{week}</CardTitle>
+          <CardTitle>
+            {periodMode === 'week' ? 'Weekly Summary: ' : periodMode === 'month' ? 'Monthly Summary: ' : periodMode === 'quarter' ? 'Quarterly Summary: ' : 'Yearly Summary: '}
+            {week}
+          </CardTitle>
           <CardDescription>
-            Overview of Lassa fever cases for the {isFullYear ? 'selected year' : 'selected week'}
+            Overview of Lassa fever cases for the selected {periodMode}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -121,7 +127,7 @@ export default function WeeklySummary({ data, week, selectedState = 'All States'
             {selectedState === 'All States' ? 'Top States by Suspected Cases' : 'Top States by Confirmed Cases'}
           </CardTitle>
           <CardDescription>
-            States with highest Lassa fever burden for the {isFullYear ? 'selected year' : 'selected week'}
+            States with highest Lassa fever burden for the selected {periodMode}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -176,7 +182,7 @@ export default function WeeklySummary({ data, week, selectedState = 'All States'
         <CardHeader>
           <CardTitle>Detailed State Breakdown</CardTitle>
           <CardDescription>
-            Complete breakdown of Lassa fever cases by state for the {isFullYear ? 'selected year' : 'selected week'}
+            Complete breakdown of Lassa fever cases by state for the selected {periodMode}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -197,8 +203,8 @@ export default function WeeklySummary({ data, week, selectedState = 'All States'
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {isFullYear 
-                    // For full year view, group by state to avoid duplicates
+                  {isAggregatedPeriod
+                    // For aggregated periods (month/quarter/year), group by state to avoid duplicates
                     ? Object.values(
                         data.reduce((acc, item) => {
                           if (!acc[item.state]) {

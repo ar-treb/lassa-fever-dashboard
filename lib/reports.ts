@@ -16,12 +16,22 @@ export interface LassaSummary {
     suspected: number
     deaths: number
   }
+  previousTotals: {
+    confirmed: number
+    suspected: number
+    deaths: number
+  }
   averages: {
     confirmed: number
     suspected: number
     deaths: number
   }
   deltas: {
+    confirmed: number
+    suspected: number
+    deaths: number
+  }
+  previousAverages?: {
     confirmed: number
     suspected: number
     deaths: number
@@ -80,6 +90,7 @@ export async function fetchLassaSummary({ startDate, endDate, states }: SummaryQ
     periodStart: row.period_start ?? "",
     periodEnd: row.period_end ?? "",
     totals,
+    previousTotals: previous,
     averages: {
       confirmed: row.avg_confirmed ?? 0,
       suspected: row.avg_suspected ?? 0,

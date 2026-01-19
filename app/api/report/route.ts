@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server"
-import { differenceInDays, parseISO } from "date-fns"
+import { addDays, differenceInDays, parseISO } from "date-fns"
 
 import { fetchLassaSummary } from "@/lib/reports"
 import { fetchWeeklyCoverage } from "@/lib/data"
-import { formatDateRange } from "@/lib/utils"
+import { calculatePercentageChange, formatDateRange } from "@/lib/utils"
 import { generateStructuredReport, ReportGenerationError } from "@/lib/llm/report_client"
 
 const MAX_RANGE_DAYS = 366 * 2
@@ -59,15 +59,23 @@ export async function POST(request: Request) {
 
     const rangeLabel = formatDateRange(startDate, endDate)
 
+    const totalDays = differenceInDays(endDate, startDate) + 1
+    const totalWeeksCeil = Math.max(1, Math.ceil(totalDays / 7))
+
     const coverage = await fetchWeeklyCoverage(
       startDate.toISOString().slice(0, 10),
       endDate.toISOString().slice(0, 10),
       states
     )
+    const previousEndDate = addDays(startDate, -1)
+    const previousStartDate = addDays(previousEndDate, -(totalDays - 1))
+    const previousCoverage = await fetchWeeklyCoverage(
+      previousStartDate.toISOString().slice(0, 10),
+      previousEndDate.toISOString().slice(0, 10),
+      states
+    )
 
     // Compute averages per reported week (prefer actual published weeks; fallback to window length)
-    const totalDays = differenceInDays(endDate, startDate) + 1
-    const totalWeeksCeil = Math.max(1, Math.ceil(totalDays / 7))
     const weeksReported = (coverage.availableWeekLabels?.length ?? 0) > 0
       ? coverage.availableWeekLabels.length
       : totalWeeksCeil
@@ -75,13 +83,35 @@ export async function POST(request: Request) {
     const coverageRatio =
       typeof coverage.coverageRatio === "number" ? coverage.coverageRatio : weeksReported / totalWeeks
 
+    const previousTotalWeeks = previousCoverage.totalWeeks ?? totalWeeksCeil
+    const previousWeeksReported = (previousCoverage.availableWeekLabels?.length ?? 0) > 0
+      ? previousCoverage.availableWeekLabels.length
+      : previousTotalWeeks
+
+    const averagesPerReportedWeek = {
+      confirmed: summary.totals.confirmed / weeksReported,
+      suspected: summary.totals.suspected / weeksReported,
+      deaths: summary.totals.deaths / weeksReported,
+    }
+
+    const previousAveragesPerReportedWeek = {
+      confirmed: summary.previousTotals.confirmed / previousWeeksReported,
+      suspected: summary.previousTotals.suspected / previousWeeksReported,
+      deaths: summary.previousTotals.deaths / previousWeeksReported,
+    }
+
+    const perReportedWeekDeltas = {
+      confirmed: calculatePercentageChange(averagesPerReportedWeek.confirmed, previousAveragesPerReportedWeek.confirmed),
+      suspected: calculatePercentageChange(averagesPerReportedWeek.suspected, previousAveragesPerReportedWeek.suspected),
+      deaths: calculatePercentageChange(averagesPerReportedWeek.deaths, previousAveragesPerReportedWeek.deaths),
+    }
+
     const adjustedSummary = {
       ...summary,
-      averages: {
-        confirmed: summary.totals.confirmed / weeksReported,
-        suspected: summary.totals.suspected / weeksReported,
-        deaths: summary.totals.deaths / weeksReported,
-      },
+      averages: averagesPerReportedWeek,
+      deltas: perReportedWeekDeltas,
+      previousTotals: summary.previousTotals,
+      previousAverages: previousAveragesPerReportedWeek,
     }
 
     const report = await generateStructuredReport(adjustedSummary, {

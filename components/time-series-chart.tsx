@@ -7,9 +7,10 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/
 interface TimeSeriesChartProps {
   data: any[]
   selectedState?: string
+  selectedYear?: string
 }
 
-export default function TimeSeriesChart({ data, selectedState = 'All States' }: TimeSeriesChartProps) {
+export default function TimeSeriesChart({ data, selectedState = 'All States', selectedYear }: TimeSeriesChartProps) {
   // Format week labels to be more readable
   const formattedData = data.map((item) => {
     // Extract week number from week_formatted (e.g., "2021-W01" -> "W01")
@@ -24,7 +25,7 @@ export default function TimeSeriesChart({ data, selectedState = 'All States' }: 
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle>Weekly Lassa Fever Cases{selectedState !== 'All States' ? ` in ${selectedState}` : ' in Nigeria'}</CardTitle>
+        <CardTitle>Weekly Lassa Fever Cases{selectedState !== 'All States' ? ` in ${selectedState}` : ' in Nigeria'}{selectedYear ? ` (${selectedYear})` : ''}</CardTitle>
         <CardDescription>Trend of suspected cases, confirmed cases, and deaths{selectedState !== 'All States' ? ` in ${selectedState}` : ' in Nigeria'} over time</CardDescription>
       </CardHeader>
       <CardContent>

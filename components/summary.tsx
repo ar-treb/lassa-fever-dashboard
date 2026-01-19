@@ -6,14 +6,22 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import type { LassaFeverData } from "@/lib/data"
 
+type PeriodMode = "week" | "month" | "quarter" | "year"
+
 interface SummaryProps {
   data: LassaFeverData[]
   week: string
   selectedState?: string
-  isFullYear?: boolean
+  periodMode?: PeriodMode
 }
 
-export default function Summary({ data, week, selectedState = 'All States', isFullYear = false }: SummaryProps) {
+export default function Summary({
+  data,
+  week,
+  selectedState = 'All States',
+  periodMode = 'week',
+}: SummaryProps) {
+  const isAggregatedPeriod = periodMode !== 'week'
   // Aggregate totals
   const totals = data.reduce(
     (acc, item) => {
@@ -27,8 +35,8 @@ export default function Summary({ data, week, selectedState = 'All States', isFu
 
   // Prepare data for bar chart
   const topStates = (() => {
-    // If full year data needs to be aggregated by state first to avoid duplicates
-    let processedData = isFullYear
+    // If aggregated period (month/quarter/year), aggregate by state to avoid duplicates
+    let processedData = isAggregatedPeriod
       ? Object.values(
           data.reduce((acc, item) => {
             if (!acc[item.state]) {
@@ -76,9 +84,12 @@ export default function Summary({ data, week, selectedState = 'All States', isFu
     <div className="grid gap-6 md:grid-cols-2">
       <Card>
         <CardHeader>
-          <CardTitle>{isFullYear ? 'Yearly Summary: ' : 'Weekly Summary: '}{week}</CardTitle>
+          <CardTitle>
+            {periodMode === 'week' ? 'Weekly Summary: ' : periodMode === 'month' ? 'Monthly Summary: ' : periodMode === 'quarter' ? 'Quarterly Summary: ' : 'Yearly Summary: '}
+            {week}
+          </CardTitle>
           <CardDescription>
-            Overview of Lassa fever cases{selectedState !== 'All States' ? ` in ${selectedState}` : ' in Nigeria'} for the {isFullYear ? 'selected year' : 'selected week'}
+            Overview of Lassa fever cases{selectedState !== 'All States' ? ` in ${selectedState}` : ' in Nigeria'} for the selected {periodMode}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -121,7 +132,7 @@ export default function Summary({ data, week, selectedState = 'All States', isFu
             {selectedState === 'All States' ? 'Top States by Suspected Cases' : 'Top States by Confirmed Cases'}
           </CardTitle>
           <CardDescription>
-            States with highest Lassa fever burden{selectedState !== 'All States' ? ` in ${selectedState}` : ' in Nigeria'} for the {isFullYear ? 'selected year' : 'selected week'}
+            States with highest Lassa fever burden{selectedState !== 'All States' ? ` in ${selectedState}` : ' in Nigeria'} for the selected {periodMode}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -168,79 +179,6 @@ export default function Summary({ data, week, selectedState = 'All States', isFu
                 <Bar dataKey="deaths" fill="var(--color-deaths)" />
               </BarChart>
             </ChartContainer>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card className="md:col-span-2">
-        <CardHeader>
-          <CardTitle>Detailed State Breakdown</CardTitle>
-          <CardDescription>
-            Complete breakdown of Lassa fever cases{selectedState !== 'All States' ? ` in ${selectedState}` : ' in Nigeria'} for the {isFullYear ? 'selected year' : 'selected week'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {data.length === 0 ? (
-            <div className="flex items-center justify-center h-[200px] text-muted-foreground">
-              No data available for the selected week
-            </div>
-          ) : (
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>State</TableHead>
-                    <TableHead className="text-right">Suspected</TableHead>
-                    <TableHead className="text-right">Confirmed</TableHead>
-                    <TableHead className="text-right">Deaths</TableHead>
-                    <TableHead className="text-right">CFR (%)</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isFullYear 
-                    // For full year view, group by state to avoid duplicates
-                    ? Object.values(
-                        data.reduce((acc, item) => {
-                          if (!acc[item.state]) {
-                            acc[item.state] = {
-                              state: item.state,
-                              suspected: 0,
-                              confirmed: 0,
-                              deaths: 0,
-                            }
-                          }
-                          acc[item.state].suspected += item.suspected
-                          acc[item.state].confirmed += item.confirmed
-                          acc[item.state].deaths += item.deaths
-                          return acc
-                        }, {} as Record<string, any>)
-                      ).map((item, index) => (
-                        <TableRow key={`${item.state}-${index}`}>
-                          <TableCell className="font-medium">{item.state}</TableCell>
-                          <TableCell className="text-right">{item.suspected}</TableCell>
-                          <TableCell className="text-right">{item.confirmed}</TableCell>
-                          <TableCell className="text-right">{item.deaths}</TableCell>
-                          <TableCell className="text-right">
-                            {item.confirmed > 0 ? `${((item.deaths / item.confirmed) * 100).toFixed(1)}%` : "N/A"}
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    // For weekly view, no need to group since entries are unique
-                    : data.map((item, index) => (
-                        <TableRow key={`${item.state}-${index}`}>
-                          <TableCell className="font-medium">{item.state}</TableCell>
-                          <TableCell className="text-right">{item.suspected}</TableCell>
-                          <TableCell className="text-right">{item.confirmed}</TableCell>
-                          <TableCell className="text-right">{item.deaths}</TableCell>
-                          <TableCell className="text-right">
-                            {item.confirmed > 0 ? `${((item.deaths / item.confirmed) * 100).toFixed(1)}%` : "N/A"}
-                          </TableCell>
-                        </TableRow>
-                      ))
-                  }
-                </TableBody>
-              </Table>
-            </div>
           )}
         </CardContent>
       </Card>

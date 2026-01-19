@@ -2,18 +2,23 @@
 
 import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { NigeriaMap } from "@/components/NigeriaMap"
 import type { LassaFeverData } from "@/lib/data"
 
+type PeriodMode = "week" | "month" | "quarter" | "year"
+type MapMetric = "suspected" | "confirmed" | "deaths"
+
 interface StateMapProps {
   data: LassaFeverData[]
-  isFullYear?: boolean
-  selectedYear?: string
+  periodMode?: PeriodMode
+  periodLabel?: string
   selectedState?: string
 }
 
-export default function StateMap({ data, isFullYear = false, selectedYear, selectedState = 'All States' }: StateMapProps) {
-  const [hoveredState, setHoveredState] = useState<string | null>(null)
+export default function StateMap({ data, periodMode = 'week', periodLabel, selectedState = 'All States' }: StateMapProps) {
+  const isAggregatedPeriod = periodMode !== 'week'
+  const [mapMetric, setMapMetric] = useState<MapMetric>('suspected')
 
   return (
     <Card>
@@ -28,11 +33,37 @@ export default function StateMap({ data, isFullYear = false, selectedYear, selec
           </div>
         ) : (
           <div className="flex flex-col items-center">
+            <div className="mb-4 flex w-full items-center justify-end gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={mapMetric === 'suspected' ? 'default' : 'outline'}
+                onClick={() => setMapMetric('suspected')}
+              >
+                Suspected
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={mapMetric === 'confirmed' ? 'default' : 'outline'}
+                onClick={() => setMapMetric('confirmed')}
+              >
+                Confirmed
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={mapMetric === 'deaths' ? 'default' : 'outline'}
+                onClick={() => setMapMetric('deaths')}
+              >
+                Deaths
+              </Button>
+            </div>
             <NigeriaMap 
               data={data} 
-              onStateHover={setHoveredState}
-              isFullYear={isFullYear}
-              selectedYear={selectedYear}
+              isAggregatedPeriod={isAggregatedPeriod}
+              periodLabel={periodLabel}
+              colorMetric={mapMetric}
             />
             
             <div className="mt-4 flex justify-center">

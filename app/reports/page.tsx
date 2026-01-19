@@ -23,9 +23,10 @@ import type { ReportApiSuccess, ReportApiResponse, StateMode } from "@/lib/types
 import TimeSeriesChart from "@/components/time-series-chart"
 import { AlertCard } from "@/components/reports/alert-card"
 import { StateMultiSelect } from "@/components/reports/state-multi-select"
-import { ReportResultCard } from "@/components/reports/report-result-card"
 import { DateRangePicker } from "@/components/reports/date-range-picker"
+import { DownloadCSVButton } from "@/components/reports/download-csv-button"
 import { DownloadPDFButton } from "@/components/reports/download-pdf-button"
+import { ReportResultCard } from "@/components/reports/report-result-card"
 
 export default function ReportsPage() {
   const today = useMemo(() => new Date(), [])
@@ -79,6 +80,24 @@ export default function ReportsPage() {
   }, [stateMode, availableStates, selectedState])
 
   const hasValidDateRange = typeof dateRange?.from !== "undefined" && typeof dateRange?.to !== "undefined"
+  const startDateISO = hasValidDateRange ? (dateRange?.from as Date).toISOString().slice(0, 10) : null
+  const endDateISO = hasValidDateRange ? (dateRange?.to as Date).toISOString().slice(0, 10) : null
+
+  const statesPayload = useMemo(() => {
+    if (stateMode === "all") {
+      return ["All States"]
+    }
+
+    if (stateMode === "single" && selectedState) {
+      return [selectedState]
+    }
+
+    if (stateMode === "multi" && selectedStates.length > 0) {
+      return selectedStates
+    }
+
+    return ["All States"]
+  }, [selectedState, selectedStates, stateMode])
 
   const displayDateRange = hasValidDateRange
     ? `${format(dateRange.from as Date, DATE_DISPLAY_FORMAT)} – ${format(dateRange.to as Date, DATE_DISPLAY_FORMAT)}`
@@ -115,20 +134,8 @@ export default function ReportsPage() {
       return
     }
 
-    const startDate = (dateRange?.from as Date).toISOString().slice(0, 10)
-    const endDate = (dateRange?.to as Date).toISOString().slice(0, 10)
-
-    let statesPayload: string[]
-
-    if (stateMode === "all") {
-      statesPayload = ["All States"]
-    } else if (stateMode === "single" && selectedState) {
-      statesPayload = [selectedState]
-    } else if (stateMode === "multi" && selectedStates.length > 0) {
-      statesPayload = selectedStates
-    } else {
-      statesPayload = ["All States"]
-    }
+    const startDate = startDateISO as string
+    const endDate = endDateISO as string
 
     setIsLoading(true)
     setError("")
@@ -336,7 +343,13 @@ export default function ReportsPage() {
 
       {result ? (
         <div className="space-y-4">
-          <div className="flex justify-end">
+          <div className="flex flex-wrap justify-end gap-2">
+            <DownloadCSVButton
+              startDate={startDateISO ?? undefined}
+              endDate={endDateISO ?? undefined}
+              states={statesPayload}
+              statesLabel={selectedStatesLabel}
+            />
             <DownloadPDFButton
               result={result}
               dateRange={displayDateRange}
