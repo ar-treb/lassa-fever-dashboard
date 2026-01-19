@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 const routes = [
   { label: "Data View", value: "/" },
   { label: "Reports", value: "/reports" },
+  { label: "Compare", value: "/compare" },
   { label: "Chat", value: "/chat" },
 ]
 

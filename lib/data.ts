@@ -13,6 +13,20 @@ export interface LassaFeverData {
   deaths: number
 }
 
+export type ReportComparisonRow = {
+  state: string
+  suspected: number | null
+  confirmed: number | null
+  probable: number | null
+  hcw: number | null
+  deaths: number | null
+}
+
+export type ReportComparisonResult = {
+  pdfUrl: string | null
+  extractedData: ReportComparisonRow[]
+}
+
 type LassaDataRow = {
   id: string | number | null
   year: number | null
@@ -129,6 +143,80 @@ export async function fetchAvailableStates(): Promise<string[]> {
   return (data ?? [])
     .map((item: { state: string | null }) => (item.state ? String(item.state) : null))
     .filter((state): state is string => !!state)
+}
+
+export async function fetchAvailableReportYears(): Promise<number[]> {
+  const supabase = createSupabaseClient()
+
+  const { data, error } = await supabase.rpc("get_distinct_lassa_full_years")
+
+  if (error) {
+    console.error("Error fetching report years:", error)
+    return []
+  }
+
+  return (data ?? [])
+    .map((item: { full_year: number | null }) => item.full_year)
+    .filter((value): value is number => typeof value === "number")
+    .sort((a, b) => b - a)
+}
+
+export async function fetchAvailableReportWeeks(year: number | string): Promise<number[]> {
+  const numericYear = toInteger(year)
+  if (numericYear === null) {
+    return []
+  }
+
+  const supabase = createSupabaseClient()
+
+  const { data, error } = await supabase.rpc("get_distinct_lassa_weeks", {
+    selected_year: numericYear,
+  })
+
+  if (error) {
+    console.error("Error fetching report weeks:", error)
+    return []
+  }
+
+  const weekSet = new Set<number>()
+  for (const row of (data ?? []) as Array<{ week_key: string | null }>) {
+    if (!row.week_key) continue
+    const parsed = parseWeekKey(row.week_key)
+    if (parsed && parsed.fullYear === numericYear) {
+      weekSet.add(parsed.week)
+    }
+  }
+
+  return Array.from(weekSet).sort((a, b) => a - b)
+}
+
+export async function fetchReportComparison(
+  year: number | string,
+  week: number | string
+): Promise<ReportComparisonResult> {
+  try {
+    const response = await fetch("/api/compare", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ year, week }),
+    })
+
+    if (!response.ok) {
+      console.error("Failed to fetch comparison data:", response.status)
+      return { pdfUrl: null, extractedData: [] }
+    }
+
+    const data = (await response.json()) as ReportComparisonResult
+    return {
+      pdfUrl: data?.pdfUrl ?? null,
+      extractedData: Array.isArray(data?.extractedData) ? data.extractedData : [],
+    }
+  } catch (error) {
+    console.error("Failed to fetch comparison data:", error)
+    return { pdfUrl: null, extractedData: [] }
+  }
 }
 
 type CoverageRow = {

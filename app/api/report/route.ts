@@ -5,8 +5,13 @@ import { fetchLassaSummary } from "@/lib/reports"
 import { fetchWeeklyCoverage } from "@/lib/data"
 import { calculatePercentageChange, formatDateRange } from "@/lib/utils"
 import { generateStructuredReport, ReportGenerationError } from "@/lib/llm/report_client"
+import { getClientIp, getRateLimitHeaders, rateLimit } from "@/lib/rate-limit"
 
 const MAX_RANGE_DAYS = 366 * 2
+const REPORT_RATE_LIMIT = {
+  limit: 2,
+  windowSeconds: 60,
+}
 
 function safeParseDate(value: unknown) {
   if (typeof value !== "string") return null
@@ -15,22 +20,53 @@ function safeParseDate(value: unknown) {
 }
 
 export async function POST(request: Request) {
+  const clientIp = getClientIp(request)
+  const rateLimitResult = await rateLimit({
+    key: `api:report:${clientIp}`,
+    limit: REPORT_RATE_LIMIT.limit,
+    windowSeconds: REPORT_RATE_LIMIT.windowSeconds,
+  })
+  const rateLimitHeaders = getRateLimitHeaders(rateLimitResult)
+
+  if (!rateLimitResult.allowed) {
+    const retryAfterSeconds = Math.max(0, Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000))
+    return NextResponse.json(
+      { error: "Rate limit exceeded. Please try again later." },
+      {
+        status: 429,
+        headers: {
+          ...rateLimitHeaders,
+          "Retry-After": String(retryAfterSeconds),
+        },
+      }
+    )
+  }
+
+  const respond = (data: unknown, init?: ResponseInit) =>
+    NextResponse.json(data, {
+      ...init,
+      headers: {
+        ...rateLimitHeaders,
+        ...(init?.headers ?? {}),
+      },
+    })
+
   try {
     const body = await request.json()
     const startDate = safeParseDate(body.startDate)
     const endDate = safeParseDate(body.endDate)
 
     if (!startDate || !endDate) {
-      return NextResponse.json({ error: "startDate and endDate are required ISO strings" }, { status: 400 })
+      return respond({ error: "startDate and endDate are required ISO strings" }, { status: 400 })
     }
 
     if (endDate < startDate) {
-      return NextResponse.json({ error: "endDate must be after startDate" }, { status: 400 })
+      return respond({ error: "endDate must be after startDate" }, { status: 400 })
     }
 
     const span = differenceInDays(endDate, startDate)
     if (span > MAX_RANGE_DAYS) {
-      return NextResponse.json({ error: "Date range must be 2 years or less" }, { status: 400 })
+      return respond({ error: "Date range must be 2 years or less" }, { status: 400 })
     }
 
     const rawStates = Array.isArray(body.states)
@@ -50,7 +86,7 @@ export async function POST(request: Request) {
     })
 
     if (!summary) {
-      return NextResponse.json({
+      return respond({
         summary: null,
         report: null,
         message: "No data available for the selected filters",
@@ -134,7 +170,7 @@ export async function POST(request: Request) {
       },
     })
 
-    return NextResponse.json({
+    return respond({
       summary: adjustedSummary,
       rangeLabel,
       report,
@@ -142,7 +178,7 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     if (error instanceof ReportGenerationError) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      return respond({ error: error.message }, { status: 500 })
     }
 
     if (error instanceof Response) {
@@ -150,7 +186,7 @@ export async function POST(request: Request) {
     }
 
     console.error("Report generation failed", error)
-    return NextResponse.json({ error: "Unexpected server error" }, { status: 500 })
+    return respond({ error: "Unexpected server error" }, { status: 500 })
   }
 }
 
