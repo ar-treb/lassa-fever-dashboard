@@ -1,4 +1,3 @@
-import { createClient } from "@supabase/supabase-js"
 import { NextResponse } from "next/server"
 
 import { createSupabaseClient } from "@/lib/supabase"
@@ -45,13 +44,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "year and week are required" }, { status: 400 })
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const serviceRoleKey =
-      process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_ROLE ?? null
-    const supabase =
-      supabaseUrl && serviceRoleKey
-        ? createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } })
-        : createSupabaseClient()
+    const supabase = createSupabaseClient()
 
     const { data: websiteRows, error: websiteError } = await supabase
       .from("website_data")

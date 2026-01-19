@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server"
 import { createSupabaseClient } from "@/lib/supabase"
+import { getClientIp, getRateLimitHeaders, rateLimit } from "@/lib/rate-limit"
+
+const DOWNLOAD_RATE_LIMIT = {
+  limit: 5,
+  windowSeconds: 60,
+}
+const CSV_CACHE_CONTROL = "public, max-age=600, s-maxage=3600"
 
 function toInteger(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value
@@ -22,25 +29,56 @@ function escapeCsv(value: string | number) {
 }
 
 export async function POST(request: Request) {
+  const clientIp = getClientIp(request)
+  const rateLimitResult = await rateLimit({
+    key: `api:data:download:${clientIp}`,
+    limit: DOWNLOAD_RATE_LIMIT.limit,
+    windowSeconds: DOWNLOAD_RATE_LIMIT.windowSeconds,
+  })
+  const rateLimitHeaders = getRateLimitHeaders(rateLimitResult)
+
+  if (!rateLimitResult.allowed) {
+    const retryAfterSeconds = Math.max(0, Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000))
+    return NextResponse.json(
+      { error: "Rate limit exceeded. Please try again later." },
+      {
+        status: 429,
+        headers: {
+          ...rateLimitHeaders,
+          "Retry-After": String(retryAfterSeconds),
+        },
+      }
+    )
+  }
+
+  const respondJson = (data: unknown, init?: ResponseInit) =>
+    NextResponse.json(data, {
+      ...init,
+      headers: {
+        ...rateLimitHeaders,
+        ...(init?.headers ?? {}),
+      },
+    })
+
   try {
     const body = await request.json()
     const year = typeof body.year === "string" ? body.year : null
-    const weeks = Array.isArray(body.weeks) ? body.weeks : []
+    const weeks = Array.isArray(body.weeks) ? (body.weeks as unknown[]) : []
     const state = typeof body.state === "string" ? body.state : "All States"
 
     if (!year) {
-      return NextResponse.json({ error: "Year is required" }, { status: 400 })
+      return respondJson({ error: "Year is required" }, { status: 400 })
     }
 
     if (weeks.length === 0) {
-      return NextResponse.json({ error: "At least one week is required" }, { status: 400 })
+      return respondJson({ error: "At least one week is required" }, { status: 400 })
     }
 
     const supabase = createSupabaseClient()
 
     // Parse week keys to get year and week numbers
     const weekFilters = weeks
-      .map((weekKey) => {
+      .map((weekKey: unknown) => {
         const match = String(weekKey).match(/^(\d{4})-W(\d{2})$/)
         if (!match) return null
         return {
@@ -48,10 +86,10 @@ export async function POST(request: Request) {
           week: Number(match[2]),
         }
       })
-      .filter((w): w is { full_year: number; week: number } => w !== null)
+      .filter((week): week is { full_year: number; week: number } => week !== null)
 
     if (weekFilters.length === 0) {
-      return NextResponse.json({ error: "No valid weeks found" }, { status: 400 })
+      return respondJson({ error: "No valid weeks found" }, { status: 400 })
     }
 
     // Build query
@@ -75,11 +113,11 @@ export async function POST(request: Request) {
 
     if (error) {
       console.error("Error fetching data for download:", error)
-      return NextResponse.json({ error: "Failed to fetch data" }, { status: 500 })
+      return respondJson({ error: "Failed to fetch data" }, { status: 500 })
     }
 
     // Filter to only include requested weeks
-    const weekSet = new Set(weeks.map((w) => String(w)))
+    const weekSet = new Set(weeks.map((week: unknown) => String(week)))
     const filteredData = (data ?? []).filter((row) => {
       const fullYear = toInteger((row as { full_year: unknown }).full_year)
       const week = toInteger((row as { week: unknown }).week)
@@ -123,11 +161,13 @@ export async function POST(request: Request) {
       headers: {
         "Content-Type": "text/csv",
         "Content-Disposition": `attachment; filename="${filename}"`,
+        "Cache-Control": CSV_CACHE_CONTROL,
+        ...rateLimitHeaders,
       },
     })
   } catch (error) {
     console.error("Unexpected error generating data CSV:", error)
-    return NextResponse.json({ error: "Unexpected server error" }, { status: 500 })
+    return respondJson({ error: "Unexpected server error" }, { status: 500 })
   }
 }
 
