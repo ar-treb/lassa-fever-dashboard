@@ -18,6 +18,12 @@ export function ExtractedDataTable({ rows }: ExtractedDataTableProps) {
     )
   }
 
+  const sortedRows = [...rows].sort((a, b) => {
+    const aValue = a.suspected ?? Number.NEGATIVE_INFINITY
+    const bValue = b.suspected ?? Number.NEGATIVE_INFINITY
+    return bValue - aValue
+  })
+
   return (
     <div className="rounded-md border">
       <Table className="table-fixed w-full text-xs">
@@ -32,7 +38,7 @@ export function ExtractedDataTable({ rows }: ExtractedDataTableProps) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rows.map((row, index) => (
+          {sortedRows.map((row, index) => (
             <TableRow key={`${row.state}-${index}`}>
               <TableCell className="px-2 py-2 font-medium leading-snug break-words">{row.state}</TableCell>
               <TableCell className="px-2 py-2 text-center">{formatValue(row.suspected)}</TableCell>
