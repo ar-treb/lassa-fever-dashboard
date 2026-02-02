@@ -206,7 +206,7 @@ export default function Dashboard() {
       <div className="flex flex-col space-y-2">
         <h1 className="text-3xl font-bold tracking-tight">Lassa Fever Dashboard - Nigeria</h1>
         <p className="text-muted-foreground">
-          Weekly surveillance data visualization for Lassa fever across Nigerian states (2021-2025)
+          Weekly surveillance data visualization for Lassa fever across Nigerian states (2021-2026)
         </p>
       </div>
 

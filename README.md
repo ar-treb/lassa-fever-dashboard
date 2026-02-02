@@ -1,6 +1,6 @@
 # Lassa Fever Dashboard
 
-Interactive Next.js dashboard for analysing Nigeria Centre for Disease Control (NCDC) Lassa fever surveillance data. The app ships with a data exploration view and an AI-assisted report generator that produce concise situation reports from Supabase-backed datasets for 2021–2025.
+Interactive Next.js dashboard for analysing Nigeria Centre for Disease Control (NCDC) Lassa fever surveillance data. The app ships with a data exploration view and an AI-assisted report generator that produce concise situation reports from Supabase-backed datasets for 2021–2026.
 
 ## Highlights
 - Data explorer with year/week/state filters, weekly vs. yearly modes, and responsive Recharts line + bar visualisations
