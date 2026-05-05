@@ -12,7 +12,6 @@ const routes = [
   { label: "Data View", value: "/" },
   { label: "Reports", value: "/reports" },
   { label: "Compare", value: "/compare" },
-  { label: "Chat", value: "/chat" },
 ]
 
 export function AppNavigation() {
